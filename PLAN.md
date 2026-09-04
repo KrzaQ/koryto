@@ -427,8 +427,12 @@ Views for the first release:
 
 - **Day** (default, `/d/2026-09-04`): the meals of the day as a list with
   inline edit and an add row (description, kcal, protein, a food picker that
-  fills the numbers, portions), weigh-ins, activities, and a header with
-  kcal against target as a bar, protein, balance, sport minutes. Voided
+  fills the numbers, portions), weigh-ins, activities, and a header that
+  answers "have I got room": kcal left against the day's burn (the target
+  until there is an estimate) as a bar, the same per logged day over the last
+  seven, protein, sport. Under it the week as one column a day: the day's
+  sport below the line, the food that remains above, and the base as the line
+  to beat, so a column ending under the line is a day with room left. Voided
   entries are hidden behind a "show voided" toggle. Day arrows and a date
   picker; a badge shows the zone the day was computed in when it differs
   from the house zone.

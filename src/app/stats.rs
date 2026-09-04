@@ -9,7 +9,7 @@ use utoipa::ToSchema;
 use super::AppResult;
 use super::day::{self, DayRow};
 use crate::db::{Db, User};
-use crate::domain::expenditure::{self, Estimate, Profile, Sex, WINDOW_DAYS};
+use crate::domain::expenditure::{self, Basis, Estimate, Profile, Sex, WINDOW_DAYS};
 
 pub fn profile_of(user: &User) -> Profile {
     Profile {
@@ -47,6 +47,31 @@ pub async fn expenditure_on(db: &Db, user: &User, end: NaiveDate) -> AppResult<E
         end,
         &profile_of(user),
     ))
+}
+
+/// One day's estimate, flattened for the wire.
+#[derive(Debug, Clone, Serialize, ToSchema, PartialEq)]
+pub struct DayEstimate {
+    pub day: NaiveDate,
+    /// Base plus the day's sport
+    pub kcal: Option<i32>,
+    pub base_kcal: Option<i32>,
+    pub sport_kcal: i32,
+    pub basis: Basis,
+    pub logged_days: usize,
+}
+
+impl DayEstimate {
+    pub fn of(day: NaiveDate, e: &Estimate) -> Self {
+        Self {
+            day,
+            kcal: e.kcal,
+            base_kcal: e.base_kcal,
+            sport_kcal: e.sport_kcal,
+            basis: e.basis,
+            logged_days: e.logged_days,
+        }
+    }
 }
 
 /// One estimate per day of the range; each day looks back over its own
@@ -114,6 +139,8 @@ pub struct Summary {
     /// As of the last day of the range
     pub expenditure: Estimate,
     pub rows: Vec<DayRow>,
+    /// One per row, same order: what each day's burn was made of
+    pub expenditure_days: Vec<DayEstimate>,
 }
 
 pub async fn summary(db: &Db, user: &User, from: NaiveDate, to: NaiveDate) -> AppResult<Summary> {
@@ -180,6 +207,7 @@ pub async fn summary(db: &Db, user: &User, from: NaiveDate, to: NaiveDate) -> Ap
         mean_balance_vs_expenditure: mean(vs_expenditure.iter().map(|(k, e)| k - e).collect()),
         weight,
         expenditure,
+        expenditure_days: series.iter().map(|(d, e)| DayEstimate::of(*d, e)).collect(),
         rows,
     })
 }

@@ -7,7 +7,7 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
-use crate::app::stats::{self, Summary, Week};
+use crate::app::stats::{self, DayEstimate, Summary, Week};
 use crate::app::{day as appday, scope};
 use crate::domain::expenditure::{Basis, Estimate};
 use crate::http::AppState;
@@ -71,22 +71,11 @@ pub async fn weight(
 }
 
 #[derive(Serialize, ToSchema)]
-pub struct ExpenditurePoint {
-    pub day: NaiveDate,
-    /// Base plus the day's sport
-    pub kcal: Option<i32>,
-    pub base_kcal: Option<i32>,
-    pub sport_kcal: i32,
-    pub basis: Basis,
-    pub logged_days: usize,
-}
-
-#[derive(Serialize, ToSchema)]
 pub struct ExpenditureStats {
     pub user_id: i32,
     pub from: NaiveDate,
     pub to: NaiveDate,
-    pub days: Vec<ExpenditurePoint>,
+    pub days: Vec<DayEstimate>,
     /// As of `to`
     pub latest: Estimate,
 }
@@ -117,15 +106,8 @@ pub async fn expenditure(
         from: q.from,
         to: q.to,
         days: series
-            .into_iter()
-            .map(|(day, e)| ExpenditurePoint {
-                day,
-                kcal: e.kcal,
-                base_kcal: e.base_kcal,
-                sport_kcal: e.sport_kcal,
-                basis: e.basis,
-                logged_days: e.logged_days,
-            })
+            .iter()
+            .map(|(day, e)| DayEstimate::of(*day, e))
             .collect(),
         latest,
     }))

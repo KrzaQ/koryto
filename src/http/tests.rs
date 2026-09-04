@@ -1242,6 +1242,13 @@ async fn stats_endpoints_follow_the_days() {
     assert!(vs < 2000 - base && vs > 2000 - base - 100, "{b}");
     assert_eq!(b["expenditure"]["kcal"], base + 500);
     assert_eq!(b["rows"].as_array().unwrap().len(), 7);
+    // One estimate per row, in the same order: what the chart draws.
+    let per_day = b["expenditure_days"].as_array().unwrap();
+    assert_eq!(per_day.len(), 7);
+    assert_eq!(per_day[0]["day"], "2026-08-24");
+    assert_eq!(per_day[6]["sport_kcal"], 500);
+    assert_eq!(per_day[6]["kcal"], base + 500);
+    assert_eq!(per_day[5]["sport_kcal"], 0);
     let (s, _, _) = call(
         &app,
         req(
