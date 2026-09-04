@@ -24,7 +24,7 @@ async fn app(t: &TestDb) -> Router {
             issuer: String::new(),
             client_id: String::new(),
             client_secret: String::new(),
-            group: "koryto".into(),
+            group: Some("koryto".into()),
         }),
         auto_migrate: false,
         timezone: chrono_tz::Europe::Warsaw,

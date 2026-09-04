@@ -38,7 +38,7 @@ fn oidc_mode() -> AuthMode {
         issuer: "http://127.0.0.1:1/unused".into(),
         client_id: "x".into(),
         client_secret: "y".into(),
-        group: "koryto".into(),
+        group: Some("koryto".into()),
     })
 }
 
@@ -1337,12 +1337,16 @@ mod oidc_flow {
     }
 
     async fn oidc_app(t: &TestDb, iss: &Issuer) -> Router {
+        oidc_app_with(t, iss, Some("koryto")).await
+    }
+
+    async fn oidc_app_with(t: &TestDb, iss: &Issuer, group: Option<&str>) -> Router {
         let cfg = config(
             AuthMode::Oidc(OidcConfig {
                 issuer: iss.server.uri(),
                 client_id: "client".into(),
                 client_secret: "secret".into(),
-                group: "koryto".into(),
+                group: group.map(String::from),
             }),
             "http://localhost:8000",
         );
@@ -1435,6 +1439,29 @@ mod oidc_flow {
         assert_eq!(s, StatusCode::FORBIDDEN);
         assert!(!cookie_header(&h).contains("koryto_session="));
         assert!(t.db.list_users().await.unwrap().is_empty());
+        t.finish().await;
+    }
+
+    #[tokio::test]
+    async fn without_a_configured_group_anyone_may_log_in() {
+        let t = db_or_skip!();
+        let iss = issuer().await;
+        let app = oidc_app_with(&t, &iss, None).await;
+        let (state, nonce, cookies) = start_login(&app).await;
+        iss.mount_token(&nonce, &["staff"]).await;
+        let cb = Request::builder()
+            .method("GET")
+            .uri(format!("/api/auth/callback?code=abc&state={state}"))
+            .header(header::COOKIE, &cookies)
+            .body(Body::empty())
+            .unwrap();
+        let (s, _, h) = call(&app, cb).await;
+        assert_eq!(s, StatusCode::SEE_OTHER);
+        assert!(cookie_header(&h).contains("koryto_session="));
+        // In, but in no household: the data stays out of reach.
+        let u = t.db.list_users().await.unwrap();
+        assert_eq!(u.len(), 1);
+        assert!(u[0].household_id.is_none());
         t.finish().await;
     }
 

@@ -69,7 +69,7 @@ pub type GroupsClient<
 pub struct OidcClient {
     client: GroupsClient,
     http: reqwest::Client,
-    pub group: String,
+    pub group: Option<String>,
 }
 
 /// What the login handler stores in the private cookie between redirect and

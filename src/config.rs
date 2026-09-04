@@ -29,7 +29,9 @@ pub struct OidcConfig {
     pub issuer: String,
     pub client_id: String,
     pub client_secret: String,
-    pub group: String,
+    /// Only members of this authentik group may log in; None lets any
+    /// account in, and household membership does the gating.
+    pub group: Option<String>,
 }
 
 pub fn var(name: &str) -> Option<String> {
@@ -71,7 +73,7 @@ impl Config {
                 issuer: require("KORYTO_OIDC_ISSUER")?,
                 client_id: require("KORYTO_OIDC_CLIENT_ID")?,
                 client_secret: require("KORYTO_OIDC_CLIENT_SECRET")?,
-                group: var("KORYTO_OIDC_GROUP").unwrap_or_else(|| "koryto".into()),
+                group: var("KORYTO_OIDC_GROUP"),
             }),
             other => bail!("KORYTO_AUTH must be oidc or dev, got {other:?}"),
         };

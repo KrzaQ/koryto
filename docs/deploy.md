@@ -6,7 +6,10 @@ only the runbook.
 
 ## 1. authentik
 
-1. Directory → Groups: create `koryto`, add both of you.
+1. Optional: Directory → Groups: create `koryto`, add both of you, and
+   either bind it to the application as a policy (step 3) or set
+   `KORYTO_OIDC_GROUP=koryto`. Without either, any authentik account may log
+   in; the household is what gates the data.
 2. Applications → Providers → Create → OAuth2/OpenID Provider:
    - Authorization flow: the default explicit consent (or implicit) flow
    - Client type: Confidential
@@ -15,6 +18,7 @@ only the runbook.
    - Scopes: `openid`, `email`, `profile` (the default profile mapping
      already includes `groups`)
 3. Applications → Create: name `koryto`, slug `koryto`, bind the provider.
+   To gate the login in authentik, add a policy binding for the group here.
 4. Note the issuer `https://authentik.krzaq.cc/application/o/koryto/`, the
    client id and the client secret.
 

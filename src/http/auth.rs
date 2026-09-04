@@ -343,7 +343,7 @@ fn page(status: StatusCode, title: &str, body: &str) -> Response {
     (status, Html(html)).into_response()
 }
 
-#[utoipa::path(get, path = "/api/auth/callback", tag = "auth", responses((status = 302), (status = 403, description = "not a member of the required group")))]
+#[utoipa::path(get, path = "/api/auth/callback", tag = "auth", responses((status = 302), (status = 403, description = "not a member of the required group, when one is configured")))]
 pub async fn callback(
     State(state): State<AppState>,
     jar: PrivateCookieJar,
@@ -396,19 +396,17 @@ pub async fn callback(
             );
         }
     };
-    if !identity.groups.iter().any(|g| g == &oidc.group) {
+    if let Some(group) = &oidc.group
+        && !identity.groups.iter().any(|g| g == group)
+    {
         tracing::warn!(
-            "login refused for {}: not in group {}",
-            identity.subject,
-            oidc.group
+            "login refused for {}: not in group {group}",
+            identity.subject
         );
         return page(
             StatusCode::FORBIDDEN,
             "Not allowed",
-            &format!(
-                "Your account is not in the <code>{}</code> group.",
-                oidc.group
-            ),
+            &format!("Your account is not in the <code>{group}</code> group."),
         );
     }
     let user = match state

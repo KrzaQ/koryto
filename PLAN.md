@@ -64,8 +64,8 @@ those; it lists them as outstanding.
   the house apache vhost at `https://koryto.int.krzaq.cc`. support-ui holds
   13382/13383; the scratch Postgres for development is on port 15434 of the host address the sandbox sees
   (support-ui's is 15433).
-- **Auth is OIDC in-app against authentik**, group `koryto`, exactly as
-  support-ui. Tokens: `read`, `write` (log entries, add foods, set location),
+- **Auth is OIDC in-app against authentik** as support-ui, with the group
+  check optional: the household is the real gate. Tokens: `read`, `write` (log entries, add foods, set location),
   `edit` (change and void entries, targets, foods, profile), `delegate` (a
   gateway token, Open WebUI, that names the acting user in `X-Koryto-User`).
   A non-delegate token belongs to a user and acts as that user; a delegate
@@ -147,7 +147,7 @@ Configuration is environment only, prefix `KORYTO_`:
 | `KORYTO_SECRET` | 32+ bytes, signs the session cookie |
 | `KORYTO_AUTH` | `oidc` (default) or `dev` |
 | `KORYTO_OIDC_ISSUER`, `KORYTO_OIDC_CLIENT_ID`, `KORYTO_OIDC_CLIENT_SECRET` | from authentik |
-| `KORYTO_OIDC_GROUP` | default `koryto`; login requires membership |
+| `KORYTO_OIDC_GROUP` | optional; when set, login requires membership of this authentik group |
 | `KORYTO_TIMEZONE` | house zone, default `Europe/Warsaw`; the first location row of a new user |
 | `KORYTO_AUTO_MIGRATE` | default `1`; `serve` applies migrations at startup |
 
