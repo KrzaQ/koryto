@@ -23,7 +23,8 @@ pub struct WhenError(String);
 impl When {
     /// Instants stay as they are; wall-clock times are read in `tz`. A time
     /// in a DST gap moves forward by the gap; a repeated hour takes its first
-    /// occurrence.
+    /// occurrence. The app resolves through [`resolve_wall`] directly.
+    #[cfg(test)]
     pub fn resolve(self, tz: Tz) -> DateTime<Utc> {
         match self {
             Self::Instant(i) => i,

@@ -5,8 +5,6 @@
 use chrono::{DateTime, Duration, NaiveDate, Utc};
 use chrono_tz::Tz;
 
-pub const DEFAULT_BOUNDARY_MINUTES: i32 = 240;
-
 /// The zone in force at `instant`, given the location history sorted by
 /// `valid_from` ascending. `None` when the history is empty or starts after
 /// the instant, which the origin row is there to prevent.

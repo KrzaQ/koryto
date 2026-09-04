@@ -6,7 +6,6 @@ use sqlx::FromRow;
 /// How an entry was created; stored on every meal, weight and activity.
 pub const VIA_WEB: &str = "web";
 pub const VIA_MCP: &str = "mcp";
-pub const VIA_CLI: &str = "cli";
 
 /// Where a meal's number came from.
 pub const SOURCE_ESTIMATE: &str = "estimate";

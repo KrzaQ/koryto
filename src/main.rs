@@ -1,7 +1,3 @@
-// Until the API and MCP land (steps 3 and 4) most of the database layer has
-// no caller outside the tests.
-#![allow(dead_code)]
-
 mod app;
 mod cli;
 mod config;
