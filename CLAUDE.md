@@ -37,8 +37,11 @@ this one copies its bones from.
   recomputes leave alone.
 - The zone for a user at an instant comes from `user_locations`, the row with
   the greatest `valid_from <= instant`. Every user has a `-infinity` row.
-- Exercise never subtracts from intake. Expenditure is derived from the weight
-  trend and intake over a rolling window, seeded by Mifflin-St Jeor.
+- Expenditure on a day is a base plus that day's logged sport kcal. The base
+  is derived from intake, sport and the weight trend over a rolling window
+  (so habitual sport is not counted twice), seeded by Mifflin-St Jeor times
+  a non-sport activity factor (default 1.20). Sport kcal is never subtracted
+  from intake; it raises the day's burn, and the budget is burn minus intake.
 - Households: everyone gets one of their own at first login; sharing is
   `household add-member EMAIL --to EMAIL`, which moves a person (entries
   follow their owner, foods move or fork). Everyone in one sees and may edit

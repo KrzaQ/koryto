@@ -41,11 +41,16 @@ those; it lists them as outstanding.
   and summary queries `day` and never touches zones. The zone comes from an
   effective-dated per-user location history ("I'm in New York now" is one
   tool call), with a per-entry override.
-- **Exercise never subtracts from intake.** Burned-kcal estimates are bad and
-  eating them back is worse. Sport is logged for its own sake (kind, minutes,
-  optional kcal). The headline number is intake against an **adaptive
-  expenditure** derived from the weight trend and intake over rolling weeks,
-  seeded by Mifflin-St Jeor until there is enough data.
+- **Sport raises the day's burn; it is never subtracted from intake.** The
+  headline number is intake against the day's **expenditure**: a base, what
+  the body spends on a day without training, plus the sport kcal logged that
+  day. A 600 kcal swim means 600 kcal more room that day. The base is
+  **adaptive**, derived from intake, sport and the weight trend over rolling
+  weeks (sport in the window is taken out before dividing, so a habitual
+  swimmer's sessions are not counted twice), seeded by Mifflin-St Jeor times
+  a non-sport activity factor until there is enough data. Sport kcal is the
+  number the person gives or agrees to; an entry without one leaves the
+  budget alone.
 - **kcal and protein only.** Both are integers. Weight is integer grams,
   duration integer minutes, portions a `NUMERIC(6,2)`. No floats in the
   domain; display converts.
@@ -172,7 +177,7 @@ users
   height_mm     INTEGER NULL
   born_on       DATE NULL
   sex           TEXT NULL CHECK (sex IN ('female','male'))   -- only for Mifflin-St Jeor
-  activity_factor NUMERIC(3,2) NOT NULL DEFAULT 1.40           -- Mifflin multiplier
+  activity_factor NUMERIC(3,2) NOT NULL DEFAULT 1.20           -- Mifflin multiplier, sport excluded (1.40 before migration 0004)
   created_at, last_login_at TIMESTAMPTZ
 
 user_locations                                    -- effective-dated zone
@@ -284,20 +289,26 @@ inheritance.
 - **Weight trend** = exponential moving average over day weights in day
   order, α = 0.1, seeded with the first reading, updated only on days with a
   reading (gaps do not decay it). Returned alongside the raw points.
-- **Expenditure (adaptive)** over a trailing window of 28 days ending at D,
-  for a user: let the logged days in the window be `n`, `intake` their mean
-  kcal, `Δtrend_g` the trend weight at the last weigh-in in the window minus
-  the trend at the first, `span` the days between those two weigh-ins. Then
-  `expenditure = intake − Δtrend_g × 7.7 / span` (7 700 kcal per kg, stated
-  as a constant with a comment). Reported only when `n ≥ 14` and `span ≥ 10`;
-  otherwise the **seed**: Mifflin-St Jeor with the latest trend weight (or
-  raw weight, or nothing) times `activity_factor`, and the response says
-  which (`basis: "adaptive" | "seed" | "none"`). Mifflin: `10 × kg + 6.25 × cm
-  − 5 × age + 5` (male) or `− 161` (female); needs `height_mm`, `born_on`,
-  `sex` and a weight, otherwise `none`. All of this is a pure function over a
-  slice of `(day, kcal, weight_g)` rows, unit-tested with synthetic series
-  including the flight-day case (a 30-hour day with five meals does not move
-  the number by more than the maths says).
+- **Expenditure** on day D = `base + sport_kcal(D)`, where `sport_kcal(D)` is
+  the sum of the kcal on D's non-voided sport entries (entries without a
+  number add nothing). The **base (adaptive)** over a trailing window of 28
+  days ending at D, for a user: let the logged days in the window be `n`,
+  `net` their mean of `kcal − sport_kcal`, `Δtrend_g` the trend weight at the
+  last weigh-in in the window minus the trend at the first, `span` the days
+  between those two weigh-ins. Then `base = net − Δtrend_g × 7.7 / span`
+  (7 700 kcal per kg, stated as a constant with a comment). Reported only
+  when `n ≥ 14` and `span ≥ 10`; otherwise the **seed**: Mifflin-St Jeor with
+  the latest trend weight (or raw weight, or nothing) times
+  `activity_factor`, which covers everything but logged sport (default 1.20,
+  sedentary), and the response says which (`basis: "adaptive" | "seed" |
+  "none"`). With basis `none` the sport alone is not an expenditure. Mifflin:
+  `10 × kg + 6.25 × cm − 5 × age + 5` (male) or `− 161` (female); needs
+  `height_mm`, `born_on`, `sex` and a weight, otherwise `none`. All of this is
+  a pure function over a slice of `(day, kcal, weight_g, sport_kcal)` rows,
+  unit-tested with synthetic series including the flight-day case (a 30-hour
+  day with five meals does not move the number by more than the maths says)
+  and the habitual-swimmer case (weekly sessions lower the base by their
+  share and raise the session day by the whole).
 - **Portions and foods**: a meal logged against a food stores
   `kcal = round(food.kcal × portions)` and `protein_g` likewise at write time,
   with `source = 'food'`. Editing the food later does not touch past meals.
