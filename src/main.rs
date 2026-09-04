@@ -8,6 +8,7 @@ mod config;
 mod db;
 mod domain;
 mod http;
+mod mcp;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};

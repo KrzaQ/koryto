@@ -79,6 +79,7 @@ pub fn router(state: AppState) -> Router {
     let openapi_json = axum::Json(openapi);
     Router::new()
         .merge(api)
+        .merge(crate::mcp::router(state.clone()))
         .route(
             "/api/openapi.json",
             axum::routing::get(move || async move { openapi_json.clone() }),
