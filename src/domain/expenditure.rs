@@ -5,6 +5,7 @@
 //! stands in, and the result says which it is.
 
 use chrono::NaiveDate;
+use rmcp::schemars;
 use rust_decimal::prelude::ToPrimitive;
 use rust_decimal::{Decimal, RoundingStrategy};
 use serde::Serialize;
@@ -55,7 +56,7 @@ impl std::str::FromStr for Sex {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, utoipa::ToSchema, schemars::JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum Basis {
     /// Derived from intake and the weight trend over the window.
@@ -66,7 +67,7 @@ pub enum Basis {
     None,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema, schemars::JsonSchema)]
 pub struct Estimate {
     pub kcal: Option<i32>,
     pub basis: Basis,

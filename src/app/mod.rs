@@ -6,6 +6,7 @@
 pub mod day;
 pub mod entries;
 pub mod scope;
+pub mod stats;
 pub mod time;
 
 use crate::db::DbError;
