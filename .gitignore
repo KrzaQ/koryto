@@ -1,0 +1,7 @@
+/target/
+/data/
+/frontend/node_modules/
+/frontend/dist/
+.env
+Makefile.local
+.limes.local.toml
