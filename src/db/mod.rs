@@ -67,11 +67,12 @@ const ACTIVITY_COLS: &str = "user_id, started_at, timezone, day, day_override, k
                              kcal, note, created_by, created_via";
 
 impl Db {
+    /// Lazy: the first query opens the connection, so `serve` can come up
+    /// and answer `/api/health` before (or without) the database.
     pub async fn connect(url: &str) -> Result<Self> {
         let pool = PgPoolOptions::new()
             .max_connections(8)
-            .connect(url)
-            .await
+            .connect_lazy(url)
             .context("connecting to Postgres")?;
         Ok(Self { pool })
     }
