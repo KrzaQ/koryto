@@ -71,19 +71,23 @@ the image's postgres user. DataGrip reaches the database at
 ## 4. Household
 
 Both of you log in once through the browser at
-`https://koryto.int.krzaq.cc`. A first login lands on a page saying you are
-not in a household yet. Then, on the host:
+`https://koryto.int.krzaq.cc`. Each login gets a household of its own, so
+the app works alone from the first day. Sharing is a merge, on the host:
 
 ```sh
-docker compose exec koryto koryto household create home
-docker compose exec koryto koryto household add-member home <your email>
-docker compose exec koryto koryto household add-member home <her email>
+cd /storage/encrypted/koryto
+docker compose exec koryto koryto household add-member <her email> --to <your email>
+docker compose exec koryto koryto household rename <your email> home
 docker compose exec koryto koryto household list
 ```
 
-Reload the page. On the Profile page set each person's height, birth date,
-sex and activity factor (they only feed the seed of the expenditure
-estimate), and a first target. Weights and meals can start before that.
+The joiner's entries come along by construction; their saved foods move
+where the name is free and merge where it is taken. `remove-member <email>`
+is the reverse: back to a household of their own with a copy of the foods.
+
+On the Profile page set each person's height, birth date, sex and activity
+factor (they only feed the seed of the expenditure estimate), and a first
+target. Weights and meals can start before that.
 
 ## 5. Tokens
 
@@ -96,9 +100,9 @@ On the Tokens page (session only; tokens cannot make tokens):
 
 The gateway token acts only for people who have logged into koryto through
 the browser in the last 30 days, so removing someone in authentik stops
-their Open WebUI access within that time on its own. To cut someone off at
-once, `koryto household remove-member <email>`: every read and write is
-refused from then on, whatever they still hold.
+their Open WebUI access within that time on its own. To stop someone seeing
+the shared log at once, `koryto household remove-member <email>`: they keep
+their own entries, in a household of their own, and lose sight of yours.
 
 Register `https://koryto.int.krzaq.cc/mcp` in Open WebUI with the bearer
 token and the `X-Koryto-User` header set from the acting user, the same way

@@ -19,5 +19,7 @@ suite against a real Postgres.
   and sets locations; `edit` changes and voids entries, targets, foods and
   the profile; `delegate` marks a gateway token (Open WebUI) that names the
   acting user in `X-Koryto-User` on every request.
+- Everyone gets a household of their own at first login; `koryto household
+  add-member` merges two people's logs into one shared household.
 - The web UI has day, trends, foods, profile and tokens pages, with a person
   chooser for the household.

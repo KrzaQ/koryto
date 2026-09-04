@@ -365,8 +365,9 @@ the API extractor and the MCP middleware. A delegate token without
 `X-Koryto-User`, or naming an email that has never logged in, or one whose
 last browser login is older than a session (30 days), is 403 with a message
 that says so; the last rule lets an authentik-side revocation reach the
-gateway path without a CLI step. A user with `household_id IS NULL` is 403 on everything
-but `/api/me` and logout; the frontend shows a "not in a household yet" page.
+gateway path without a CLI step. Every login has a household: a personal
+one is created with the user row, so the app works alone from day one and
+sharing is a merge (`household add-member`).
 
 ## MCP
 
@@ -427,7 +428,7 @@ Views for the first release:
   for any household member (the switcher applies).
 - **Tokens** (`/tokens`): create (secret shown once, personal or delegate),
   revoke.
-- **Login** and the "not in a household yet" page.
+- **Login**.
 
 Vitest covers the weight and portion input formatting, the day header maths
 and a jsdom smoke render of each view against fixture data.
@@ -439,7 +440,7 @@ All subcommands read `KORYTO_DATABASE_URL` and talk to the database directly.
 - `koryto serve`
 - `koryto migrate` (and `--status`)
 - `koryto token create NAME --scopes read,write[,edit][,delegate] [--user EMAIL]` / `list` / `revoke ID`
-- `koryto household create NAME` / `add-member HOUSEHOLD EMAIL` / `list`
+- `koryto household add-member EMAIL --to EMAIL` / `remove-member EMAIL` / `rename EMAIL NAME` / `list`
 - `koryto user list`
 - `koryto recompute-days [--user EMAIL]`
 
@@ -607,7 +608,7 @@ followed top to bottom without this plan.
 5. `cp .env.example .env`, fill it, `make deploy`. Migrations run on first
    start.
 6. Both of you log in once through the browser. Then `docker compose exec
-   koryto koryto household create home` and `add-member home <email>` twice.
+   koryto koryto household add-member <her email> --to <your email>`.
    Set each profile (height, birth date, sex, activity factor) and a first
    target in the UI.
 7. Tokens: `openwebui` with `read,write,edit,delegate`; `claude-code` personal

@@ -39,9 +39,11 @@ this one copies its bones from.
   the greatest `valid_from <= instant`. Every user has a `-infinity` row.
 - Exercise never subtracts from intake. Expenditure is derived from the weight
   trend and intake over a rolling window, seeded by Mifflin-St Jeor.
-- Households: everyone in one sees and may edit everyone's entries. Every
-  person-scoped read and write checks the household. Entries record `user_id`
-  (whose) and `created_by` (who logged it).
+- Households: everyone gets one of their own at first login; sharing is
+  `household add-member EMAIL --to EMAIL`, which moves a person (entries
+  follow their owner, foods move or fork). Everyone in one sees and may edit
+  everyone's entries. Every person-scoped read and write checks the
+  household. Entries record `user_id` (whose) and `created_by` (who logged it).
 - Nothing is hard-deleted; void sets `voided_at`. MCP may void with `edit`.
 - Token scopes: `read`, `write` (log, add foods, set location), `edit`
   (change, void, targets, foods, profile), `delegate` (acts as the user named
