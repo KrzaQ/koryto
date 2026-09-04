@@ -34,6 +34,27 @@ enum Command {
         #[arg(long)]
         status: bool,
     },
+    /// Manage bearer tokens for MCP clients
+    Token {
+        #[command(subcommand)]
+        command: cli::token::TokenCommand,
+    },
+    /// Manage households and their members
+    Household {
+        #[command(subcommand)]
+        command: cli::household::HouseholdCommand,
+    },
+    /// Users who have logged in
+    User {
+        #[command(subcommand)]
+        command: cli::user::UserCommand,
+    },
+    /// Re-derive the accounting day of every entry from the location history
+    RecomputeDays {
+        /// Only this person (email); default everyone
+        #[arg(long)]
+        user: Option<String>,
+    },
 }
 
 async fn connect() -> Result<Db> {
@@ -50,5 +71,9 @@ async fn main() -> Result<()> {
     match cli.command {
         Command::Serve => bail!("not implemented"),
         Command::Migrate { status } => cli::migrate::run(&connect().await?, status).await,
+        Command::Token { command } => cli::token::run(&connect().await?, command).await,
+        Command::Household { command } => cli::household::run(&connect().await?, command).await,
+        Command::User { command } => cli::user::run(&connect().await?, command).await,
+        Command::RecomputeDays { user } => cli::recompute::run(&connect().await?, user).await,
     }
 }
