@@ -24,6 +24,7 @@ this one copies its bones from.
 - `frontend/` — Vue 3 + Vite + TypeScript + Pinia + Tailwind 4 + vue-echarts; embedded into the binary from `frontend/dist`
 - `scripts/` — `test-db.sh` (throwaway Postgres for tests), `scratch-pg.sh` (host-side scratch server)
 - `packaging/` — apache vhost
+- `docs/deploy.md` — the host-side runbook
 
 ## Rules that matter
 
