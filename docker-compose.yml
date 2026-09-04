@@ -4,8 +4,11 @@
 # stopped.
 services:
   koryto:
+    # The image is built here (or in the development checkout) and never
+    # pulled: an unqualified name would otherwise be looked up on Docker Hub.
     build: .
     image: koryto:local
+    pull_policy: never
     restart: unless-stopped
     ports:
       - "127.0.0.1:13384:8000"
