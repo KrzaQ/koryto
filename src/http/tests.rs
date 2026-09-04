@@ -682,6 +682,8 @@ async fn meals_for_two_people_from_a_food_and_the_day_view() {
     assert_eq!(b["logged"], true);
     assert!(b["target"].is_null());
     assert!(b["balance"].is_null());
+    assert_eq!(b["expenditure"]["basis"], "none");
+    assert!(b["balance_vs_expenditure"].is_null());
     assert_eq!(b["weights"][0]["weight_kg"], "82.4");
     // Bob's day only has the curry.
     let (s, b, _) = call(

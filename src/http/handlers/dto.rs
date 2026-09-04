@@ -11,6 +11,7 @@ use crate::db::{
     Activity, Food, FoodWithUsage, Household, Meal, Target, User, UserLocation, Weight,
 };
 use crate::domain::duration::format_minutes;
+use crate::domain::expenditure::Estimate;
 use crate::domain::units::format_kg;
 
 #[derive(Serialize, ToSchema)]
@@ -365,6 +366,10 @@ pub struct DayDto {
     pub totals: Totals,
     pub target: Option<TargetDto>,
     pub balance: Option<i32>,
+    /// The expenditure estimate as of this day and its basis
+    pub expenditure: Estimate,
+    /// kcal minus the estimate, on a logged day with an estimate
+    pub balance_vs_expenditure: Option<i32>,
 }
 
 impl From<DayView> for DayDto {
@@ -379,6 +384,8 @@ impl From<DayView> for DayDto {
             totals: v.totals,
             target: v.target.map(Into::into),
             balance: v.balance,
+            expenditure: v.expenditure,
+            balance_vs_expenditure: v.balance_vs_expenditure,
         }
     }
 }

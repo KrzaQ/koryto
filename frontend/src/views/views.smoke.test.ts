@@ -128,6 +128,8 @@ const day = {
   totals: { kcal: 1200, protein_g: 22, meals: 2, meals_without_protein: 1, sport_minutes: 90 },
   target: me.target,
   balance: -600,
+  expenditure: { kcal: 2218, basis: 'seed', logged_days: 3, weight_span_days: 2, seed_kcal: 2218 },
+  balance_vs_expenditure: -1018,
 }
 const foods = [
   {
@@ -362,6 +364,8 @@ describe('views', () => {
     expect(w.text()).toContain('Lentil curry')
     expect(w.text()).toContain('× 1.5')
     expect(w.find('[data-testid="balance"]').text()).toBe('−600')
+    expect(w.find('[data-testid="balance-vs-expenditure"]').text()).toBe('−1018')
+    expect(w.find('[data-testid="expenditure-card"]').text()).toContain('2218')
     expect(w.findAll('[data-testid="weight-row"]')).toHaveLength(1)
     expect(w.findAll('[data-testid="activity-row"]')).toHaveLength(1)
     expect(w.text()).toContain('1 meal without protein')

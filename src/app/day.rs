@@ -8,6 +8,7 @@ use utoipa::ToSchema;
 
 use super::{AppResult, bad};
 use crate::db::{Activity, Db, Meal, Target, User, Weight};
+use crate::domain::expenditure::Estimate;
 use crate::domain::trend;
 
 /// The longest range a single request may ask for.
@@ -35,6 +36,10 @@ pub struct DayView {
     /// kcal minus the target, on a logged day with a target
     pub balance: Option<i32>,
     pub logged: bool,
+    /// The expenditure estimate as of this day, and where it comes from
+    pub expenditure: Estimate,
+    /// kcal minus the estimate, on a logged day with an estimate
+    pub balance_vs_expenditure: Option<i32>,
 }
 
 pub async fn day_view(
@@ -67,6 +72,11 @@ pub async fn day_view(
         (Some(t), true) => Some(totals.kcal - t.kcal),
         _ => None,
     };
+    let expenditure = super::stats::expenditure_on(db, user, day).await?;
+    let balance_vs_expenditure = match (expenditure.kcal, logged) {
+        (Some(e), true) => Some(totals.kcal - e),
+        _ => None,
+    };
     Ok(DayView {
         day,
         user_id: user.id,
@@ -77,6 +87,8 @@ pub async fn day_view(
         target,
         balance,
         logged,
+        expenditure,
+        balance_vs_expenditure,
     })
 }
 

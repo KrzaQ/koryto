@@ -11,10 +11,17 @@ const pct = computed(() =>
   target.value ? Math.min(100, Math.round((props.day.totals.kcal / target.value) * 100)) : 0,
 )
 const over = computed(() => target.value !== null && props.day.totals.kcal > target.value)
+const burn = computed(() => props.day.expenditure)
+const overBurn = computed(
+  () =>
+    props.day.balance_vs_expenditure !== null &&
+    props.day.balance_vs_expenditure !== undefined &&
+    props.day.balance_vs_expenditure > 0,
+)
 </script>
 
 <template>
-  <div class="grid gap-4 md:grid-cols-4" data-testid="day-header">
+  <div class="grid gap-4 md:grid-cols-5" data-testid="day-header">
     <div class="card p-4 md:col-span-2">
       <div class="text-xs tracking-wide text-muted uppercase">Intake</div>
       <div class="mt-1 flex items-baseline gap-2">
@@ -37,6 +44,31 @@ const over = computed(() => target.value !== null && props.day.totals.kcal > tar
         ></div>
       </div>
       <div v-else class="mt-2 text-xs text-muted">No target set: add one on the profile page.</div>
+    </div>
+    <div class="card p-4" data-testid="expenditure-card">
+      <div class="text-xs tracking-wide text-muted uppercase">Expenditure</div>
+      <div class="mt-1 flex items-baseline gap-2">
+        <span class="text-2xl font-semibold tabular-nums">{{ burn.kcal ?? '—' }}</span>
+        <span v-if="burn.kcal" class="text-sm text-muted">kcal</span>
+        <span
+          v-if="day.balance_vs_expenditure !== null && day.balance_vs_expenditure !== undefined"
+          class="ml-auto text-sm tabular-nums"
+          :class="overBurn ? 'text-danger' : 'text-ok'"
+          data-testid="balance-vs-expenditure"
+          >{{ signed(day.balance_vs_expenditure) }}</span
+        >
+      </div>
+      <div class="mt-2 text-xs text-muted">
+        <template v-if="burn.basis === 'adaptive'">From your intake and weight trend.</template>
+        <template v-else-if="burn.basis === 'seed'"
+          >Mifflin-St Jeor seed until {{ burn.logged_days }}/14 logged days and
+          {{ burn.weight_span_days }}/10 weigh-in days.</template
+        >
+        <template v-else
+          >Needs a weigh-in and height, birth date and sex on the
+          <RouterLink to="/profile" class="link">profile</RouterLink>.</template
+        >
+      </div>
     </div>
     <div class="card p-4">
       <div class="text-xs tracking-wide text-muted uppercase">Protein</div>

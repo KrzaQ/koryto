@@ -394,6 +394,7 @@ async fn logs_for_two_people_confirms_estimates_and_voids() {
     assert_eq!(tgt["since"], "2026-09-01");
     let mine = structured(&c.call("get_day", json!({"date": "2026-09-04"})).await);
     assert_eq!(mine["balance"], 1200 - 1800);
+    assert_eq!(mine["expenditure"]["basis"], "none");
     let s = structured(
         &c.call(
             "get_summary",

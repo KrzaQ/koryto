@@ -595,8 +595,15 @@ export interface components {
       activities: components['schemas']['ActivityDto'][]
       /** Format: int32 */
       balance?: number | null
+      /**
+       * Format: int32
+       * @description kcal minus the estimate, on a logged day with an estimate
+       */
+      balance_vs_expenditure?: number | null
       /** Format: date */
       day: string
+      /** @description The expenditure estimate as of this day and its basis */
+      expenditure: components['schemas']['Estimate']
       logged: boolean
       meals: components['schemas']['MealDto'][]
       target?: null | components['schemas']['TargetDto']
@@ -1288,7 +1295,7 @@ export interface operations {
         }
         content?: never
       }
-      /** @description not a member of the required group */
+      /** @description not a member of the required group, when one is configured */
       403: {
         headers: {
           [name: string]: unknown

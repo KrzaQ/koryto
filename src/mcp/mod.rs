@@ -456,6 +456,10 @@ pub struct DayOut {
     pub target_kcal: Option<i32>,
     /// kcal minus target, on a logged day with a target
     pub balance: Option<i32>,
+    /// Estimated daily expenditure as of this day, and its basis
+    pub expenditure: Estimate,
+    /// kcal minus the estimate, on a logged day with an estimate
+    pub balance_vs_expenditure: Option<i32>,
     pub meals: Vec<MealOut>,
     pub weights: Vec<WeightOut>,
     pub activities: Vec<ActivityOut>,
@@ -611,6 +615,8 @@ impl KorytoMcp {
             sport_minutes: v.totals.sport_minutes,
             target_kcal: v.target.as_ref().map(|t| t.kcal),
             balance: v.balance,
+            expenditure: v.expenditure,
+            balance_vs_expenditure: v.balance_vs_expenditure,
             meals: v
                 .meals
                 .into_iter()
