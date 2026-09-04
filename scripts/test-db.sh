@@ -36,11 +36,13 @@ elif docker info >/dev/null 2>&1; then
         -p 127.0.0.1:0:5432 "$IMAGE")
   cleanup+=("docker rm -f $cid")
   port=$(docker port "$cid" 5432/tcp | head -1 | sed 's/.*://')
+  # Over TCP: the image's init phase runs a socket-only server first, and a
+  # socket probe passes while that one is about to be replaced.
   for _ in $(seq 1 60); do
-    docker exec "$cid" pg_isready -U postgres -d koryto_test >/dev/null 2>&1 && break
+    docker exec "$cid" pg_isready -h 127.0.0.1 -U postgres -d koryto_test >/dev/null 2>&1 && break
     sleep 1
   done
-  docker exec "$cid" pg_isready -U postgres -d koryto_test >/dev/null
+  docker exec "$cid" pg_isready -h 127.0.0.1 -U postgres -d koryto_test >/dev/null
   export TEST_DATABASE_URL="postgres://postgres:test@127.0.0.1:$port/koryto_test"
   echo "test-db: docker $IMAGE on port $port"
 elif [ "$(id -u)" != 0 ] && command -v initdb >/dev/null 2>&1; then
