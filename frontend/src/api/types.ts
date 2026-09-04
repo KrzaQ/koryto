@@ -1,6 +1,34 @@
-// Hand-written until the backend exists; step 5 replaces this with types
-// generated from /api/openapi.json into schema.d.ts.
-export type Me = {
-  name: string | null
-  email: string | null
-}
+import type { components } from './schema'
+
+type S = components['schemas']
+
+export type Me = S['Me']
+export type UserDto = S['UserDto']
+export type MemberDto = S['MemberDto']
+export type HouseholdDto = S['HouseholdDto']
+export type ProfilePatchInput = S['ProfilePatchInput']
+export type LocationDto = S['LocationDto']
+export type LocationInput = S['LocationInput']
+export type LocationPatchInput = S['LocationPatchInput']
+export type TargetDto = S['TargetDto']
+export type TargetInput = S['TargetInput']
+export type TargetPatchInput = S['TargetPatchInput']
+export type FoodDto = S['FoodDto']
+export type FoodInput = S['FoodInput']
+export type FoodPatchInput = S['FoodPatchInput']
+export type MealDto = S['MealDto']
+export type MealInput = S['MealInput']
+export type MealPatchInput = S['MealPatchInput']
+export type WeightDto = S['WeightDto']
+export type WeightInput = S['WeightInput']
+export type WeightPatchInput = S['WeightPatchInput']
+export type ActivityDto = S['ActivityDto']
+export type ActivityInput = S['ActivityInput']
+export type ActivityPatchInput = S['ActivityPatchInput']
+export type DayDto = S['DayDto']
+export type DayRow = S['DayRow']
+export type DaysDto = S['DaysDto']
+export type Totals = S['Totals']
+export type TokenDto = S['TokenDto']
+export type TokenInput = S['TokenInput']
+export type TokenCreated = S['TokenCreated']

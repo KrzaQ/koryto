@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { ApiError, api } from '@/api/client'
 import type { Me } from '@/api/types'
 
@@ -24,5 +24,8 @@ export const useSession = defineStore('session', () => {
     me.value = null
   }
 
-  return { me, checked, load, logout }
+  const members = computed(() => me.value?.household?.members ?? [])
+  const inHousehold = computed(() => !!me.value?.household)
+
+  return { me, checked, members, inHousehold, load, logout }
 })
