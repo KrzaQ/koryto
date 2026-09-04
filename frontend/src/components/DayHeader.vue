@@ -4,6 +4,7 @@
 // the day's sport) when an estimate exists, else against the target.
 import { computed } from 'vue'
 import type { DayDto, Summary } from '@/api/types'
+import { roomOf } from '@/lib/budget'
 import { formatMinutes, signed } from '@/lib/units'
 
 const props = defineProps<{ day: DayDto; week: Summary | null; isToday: boolean }>()
@@ -13,16 +14,11 @@ const burn = computed(() => props.day.expenditure)
 const burnKcal = computed(() => burn.value.kcal ?? null)
 const eaten = computed(() => props.day.totals.kcal)
 
-/** What the budget is measured against: the burn when known, else the target. */
-const against = computed<{ kind: 'burn' | 'target'; kcal: number } | null>(() => {
-  if (burnKcal.value !== null) return { kind: 'burn', kcal: burnKcal.value }
-  if (target.value !== null) return { kind: 'target', kcal: target.value }
-  return null
-})
-const room = computed(() => (against.value ? against.value.kcal - eaten.value : null))
+const against = computed(() => roomOf(props.day))
+const room = computed(() => against.value?.kcal ?? null)
 const over = computed(() => room.value !== null && room.value < 0)
 const pct = computed(() =>
-  against.value ? Math.min(100, Math.round((eaten.value / against.value.kcal) * 100)) : 0,
+  against.value ? Math.min(100, Math.round((eaten.value / against.value.against) * 100)) : 0,
 )
 const vsTarget = computed(() => (target.value !== null ? target.value - eaten.value : null))
 
@@ -66,33 +62,26 @@ const weekRoom = computed(() => {
           :style="{ width: `${pct}%` }"
         ></div>
       </div>
-      <div class="mt-2 text-xs text-muted" data-testid="budget-note">
+      <div class="mt-2 text-xs text-muted tabular-nums" data-testid="budget-note">
         <template v-if="against?.kind === 'burn'">
-          Of {{ burnKcal }} burnt: {{ burn.base_kcal }} base<template v-if="burn.sport_kcal">
+          {{ burnKcal }} burnt = {{ burn.base_kcal }} base<template v-if="burn.sport_kcal">
             + {{ burn.sport_kcal }} sport</template
-          >.
-          <template v-if="vsTarget !== null">
-            Target {{ target }}:
-            <span :class="vsTarget < 0 ? 'text-danger' : ''" data-testid="balance"
-              >{{ Math.abs(vsTarget) }} {{ vsTarget < 0 ? 'over' : 'under' }}</span
-            >.
-          </template>
-          <template v-if="burn.basis === 'seed'"
-            >The base is the Mifflin-St Jeor seed until {{ burn.logged_days }}/14 logged days and
-            {{ burn.weight_span_days }}/10 weigh-in days.</template
           >
         </template>
-        <template v-else-if="against?.kind === 'target'">
-          Target {{ target }}:
-          <span data-testid="balance"
-            >{{ Math.abs(vsTarget!) }} {{ vsTarget! < 0 ? 'over' : 'under' }}</span
-          >. What you burn is unknown: it needs a weigh-in and height, birth date and sex on the
-          <RouterLink to="/profile" class="link">profile</RouterLink>.
+        <template v-if="vsTarget !== null">
+          <template v-if="against?.kind === 'burn'"> · </template>{{ target }} target ·
+          <span :class="vsTarget < 0 ? 'text-danger' : ''" data-testid="balance"
+            >{{ Math.abs(vsTarget) }} {{ vsTarget < 0 ? 'over' : 'under' }}</span
+          >
         </template>
-        <template v-else
-          >No target and no expenditure estimate yet. Set a target or fill in the
-          <RouterLink to="/profile" class="link">profile</RouterLink> and log a weigh-in.</template
-        >
+        <div v-if="burn.basis === 'seed'" class="mt-1">
+          Seed estimate: {{ burn.logged_days }}/14 logged days, {{ burn.weight_span_days }}/10
+          weigh-in days.
+        </div>
+        <div v-else-if="burn.basis === 'none'" class="mt-1">
+          No burn yet: needs a weigh-in and height, birth date and sex on the
+          <RouterLink to="/profile" class="link">profile</RouterLink>.
+        </div>
       </div>
     </div>
     <div class="card p-4" data-testid="week-card">
@@ -113,10 +102,11 @@ const weekRoom = computed(() => {
       </div>
       <div class="mt-2 text-xs text-muted">
         <template v-if="week && weekRoom">
-          Room per logged day against the {{ weekRoom.kind === 'burn' ? 'burn' : 'target' }},
-          {{ week.logged_days }} of 7 logged<template v-if="week.mean_kcal != null"
-            >, {{ week.mean_kcal }} eaten on average</template
-          ><template v-if="week.sport_kcal">, {{ week.sport_kcal }} kcal of sport</template>.
+          Per logged day vs {{ weekRoom.kind }} · {{ week.logged_days }}/7 logged<template
+            v-if="week.mean_kcal != null"
+          >
+            · {{ week.mean_kcal }} eaten/day</template
+          ><template v-if="week.sport_kcal"> · {{ week.sport_kcal }} sport</template>
         </template>
         <template v-else>Nothing logged in the last week.</template>
       </div>
@@ -148,11 +138,9 @@ const weekRoom = computed(() => {
         >
       </div>
       <div class="mt-2 text-xs text-muted">
-        <template v-if="day.totals.sport_kcal">Added to today's burn.</template>
-        <template v-else-if="day.totals.sport_minutes"
-          >Without a kcal figure it does not change the budget.</template
-        >
-        <template v-else>Sport kcal add to the day's burn.</template>
+        <template v-if="day.totals.sport_kcal">In the day's burn.</template>
+        <template v-else-if="day.totals.sport_minutes">No kcal logged: no effect.</template>
+        <template v-else>Sport kcal add to the burn.</template>
       </div>
     </div>
   </div>

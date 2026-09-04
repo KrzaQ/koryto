@@ -61,6 +61,9 @@ this one copies its bones from.
   (`make types` with `make dev-backend` running) and commit it.
 - Charts use the palette in `frontend/src/lib/palette.ts` in fixed slot
   order; never a dual-axis chart.
+- The landing page `/` is the dashboard (today, yesterday, weight, the
+  week); `/d/:day` is the log for one day. Numbers over sentences: card
+  notes are terse, separated by `·`, not prose.
 
 ## Commands
 

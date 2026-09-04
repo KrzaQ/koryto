@@ -6,6 +6,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { useSession } from '@/stores/session'
 import { usePerson } from '@/stores/person'
 import DayView from './DayView.vue'
+import HomeView from './HomeView.vue'
 import FoodsView from './FoodsView.vue'
 import LoginView from './LoginView.vue'
 import ProfileView from './ProfileView.vue'
@@ -439,6 +440,22 @@ describe('views', () => {
     return w
   }
 
+  it('HomeView shows today, yesterday and the last weight', async () => {
+    const w = await render(HomeView)
+    // Both days come from the same mock, so the tiles carry the same numbers;
+    // what matters is that each day is fetched and the weight is the last one.
+    expect(w.find('[data-testid="tile-today"]').text()).toContain('1618')
+    expect(w.find('[data-testid="tile-today"]').text()).toContain('left')
+    expect(w.find('[data-testid="tile-today"]').text()).toContain('2818 burnt')
+    expect(w.find('[data-testid="tile-yesterday"]').exists()).toBe(true)
+    expect(w.find('[data-testid="tile-weight"]').text()).toContain('82.4')
+    expect(w.find('[data-testid="log-today"]').text()).toContain('Lentil curry')
+    expect(w.find('[data-testid="log-yesterday"]').exists()).toBe(true)
+    expect(calls.some((c) => c.startsWith('GET /api/day?user=1&date=2026-09-04'))).toBe(true)
+    expect(calls.some((c) => c.startsWith('GET /api/day?user=1&date=2026-09-03'))).toBe(true)
+    expect(errors).toEqual([])
+  })
+
   it('DayView shows the day and opens the add row', async () => {
     const w = await render(DayView, { day: '2026-09-04' })
     expect(w.find('[data-testid="day-title"]').text()).toContain('4 Sept 2026')
@@ -450,10 +467,12 @@ describe('views', () => {
     // target of 1800 leaves 600.
     expect(w.find('[data-testid="room"]').text()).toBe('1618')
     expect(w.find('[data-testid="budget-card"]').text()).toContain('kcal left')
-    expect(w.find('[data-testid="budget-note"]').text()).toContain('2218 base + 600 sport')
+    expect(w.find('[data-testid="budget-note"]').text()).toContain(
+      '2818 burnt = 2218 base + 600 sport',
+    )
     expect(w.find('[data-testid="balance"]').text()).toBe('600 under')
     expect(w.find('[data-testid="week-room"]').text()).toBe('+400')
-    expect(w.find('[data-testid="week-card"]').text()).toContain('900 kcal of sport')
+    expect(w.find('[data-testid="week-card"]').text()).toContain('900 sport')
     expect(w.find('[data-testid="sport-card"]').text()).toContain('600 kcal')
     expect(w.find('[data-testid="budget-chart"]').exists()).toBe(true)
     expect(

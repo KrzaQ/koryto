@@ -425,7 +425,12 @@ toggle and the clock choice (my current zone or the browser's), as support-ui.
 
 Views for the first release:
 
-- **Day** (default, `/d/2026-09-04`): the meals of the day as a list with
+- **Home** (`/`, the landing page): what's up at a glance and nothing to
+  read. Room left today and yesterday (burn minus intake, target until there
+  is an estimate), the last weight with its trend and how old it is, both
+  days' meals and sport as plain lists, and the week's columns. Editing
+  happens on the day page, one click away.
+- **Day** (`/d/2026-09-04`): the meals of the day as a list with
   inline edit and an add row (description, kcal, protein, a food picker that
   fills the numbers, portions), weigh-ins, activities, and a header that
   answers "have I got room": kcal left against the day's burn (the target

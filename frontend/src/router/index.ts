@@ -5,7 +5,7 @@ import { useSession } from '@/stores/session'
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', name: 'home', redirect: () => `/d/today` },
+    { path: '/', name: 'home', component: () => import('@/views/HomeView.vue') },
     {
       path: '/login',
       name: 'login',

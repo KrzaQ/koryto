@@ -10,7 +10,8 @@ const session = useSession()
 const router = useRouter()
 
 const links = [
-  { to: '/', label: 'Day', match: '/d' },
+  { to: '/', label: 'Home', match: '/home' },
+  { to: '/d/today', label: 'Day', match: '/d' },
   { to: '/trends', label: 'Trends', match: '/trends' },
   { to: '/foods', label: 'Foods', match: '/foods' },
   { to: '/profile', label: 'Profile', match: '/profile' },
