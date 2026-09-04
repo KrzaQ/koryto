@@ -919,7 +919,7 @@ impl Db {
         token_hash: &str,
         scopes: &[String],
         user_id: Option<i32>,
-        created_by: i32,
+        created_by: Option<i32>,
     ) -> DbResult<ApiToken> {
         sqlx::query_as(
             "INSERT INTO api_tokens (name, token_hash, scopes, user_id, created_by) \

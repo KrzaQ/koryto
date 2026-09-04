@@ -762,7 +762,7 @@ async fn tokens_are_personal_or_delegate() {
             &"a".repeat(64),
             &["read".into(), "write".into()],
             Some(home.alice.id),
-            home.alice.id,
+            Some(home.alice.id),
         )
         .await
         .unwrap();
@@ -772,19 +772,13 @@ async fn tokens_are_personal_or_delegate() {
             &"b".repeat(64),
             &["read".into(), "write".into(), "delegate".into()],
             None,
-            home.alice.id,
+            None,
         )
         .await
         .unwrap();
     assert!(matches!(
-        db.create_token(
-            "bad",
-            &"c".repeat(64),
-            &["read".into()],
-            None,
-            home.alice.id
-        )
-        .await,
+        db.create_token("bad", &"c".repeat(64), &["read".into()], None, None)
+            .await,
         Err(DbError::Conflict(_))
     ));
     assert!(matches!(
@@ -793,7 +787,7 @@ async fn tokens_are_personal_or_delegate() {
             &"d".repeat(64),
             &["read".into(), "delegate".into()],
             Some(home.bob.id),
-            home.alice.id
+            Some(home.alice.id)
         )
         .await,
         Err(DbError::Conflict(_))

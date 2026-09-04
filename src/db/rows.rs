@@ -371,7 +371,8 @@ pub struct ApiToken {
     pub scopes: Vec<String>,
     /// The person a personal token acts as; NULL for a delegate token.
     pub user_id: Option<i32>,
-    pub created_by: i32,
+    /// NULL for a token made from the CLI.
+    pub created_by: Option<i32>,
     pub created_at: DateTime<Utc>,
     pub last_used_at: Option<DateTime<Utc>>,
     pub revoked_at: Option<DateTime<Utc>>,
