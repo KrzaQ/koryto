@@ -1,5 +1,5 @@
 .PHONY: help install install-backend install-frontend format lint test test-db \
-	build build-frontend dev-backend dev-frontend types docker-build docker-run clean
+	build build-frontend dev-backend dev-frontend types image docker-build docker-run clean
 .DEFAULT_GOAL := help
 
 # Machine-specific targets (deploy, extra push remotes) live in Makefile.local,
@@ -59,10 +59,13 @@ dev-frontend: ## Run the Vite dev server (proxies /api to the dev backend)
 types: ## Regenerate frontend/src/api/schema.d.ts from a running dev backend
 	cd frontend && npm run types
 
-docker-build: ## Build the deployable image
+docker-build: ## Build the deployable image (koryto:local)
 	docker compose build
 
-docker-run: docker-build ## Build and run the stack locally
+image: docker-build ## Build the image and tag it with the commit, for deploying elsewhere
+	docker tag koryto:local koryto:$$(git rev-parse --short HEAD)
+
+docker-run: docker-build ## Build and run the stack from this checkout
 	docker compose up
 
 clean: ## Remove build artifacts

@@ -39,20 +39,30 @@ CORS, no `/api` bypass and no websocket rewrite.
 
 ## 3. Deploy
 
-The deployment is its own ZFS dataset, `storage/encrypted/koryto`, mounted at
-`/storage/encrypted/koryto`: a clone of the repo with `.env`, a
-`Makefile.local` whose `deploy` pulls and rebuilds, and `data/postgres`. The
-checkout under `~/code` is for development only and runs nothing.
+Two ways to run the same `docker-compose.yml`.
+
+**On this host**, the run directory is its own ZFS dataset,
+`storage/encrypted/koryto` at `/storage/encrypted/koryto`, holding only the
+compose file, `.env` and `data/postgres`. The image is built in the
+development checkout and started there; nothing in the run directory is a
+git checkout.
 
 ```sh
 sudo zfs create -o compression=zstd storage/encrypted/koryto
 sudo chown krzaq:krzaq /storage/encrypted/koryto
-git clone ssh://git@forgejo.krzaq.cc/krzaq/koryto.git /storage/encrypted/koryto
-cd /storage/encrypted/koryto
-cp .env.example .env            # fill POSTGRES_PASSWORD, KORYTO_SECRET, the OIDC values
-docker compose up -d --build     # or: make deploy (Makefile.local)
-docker compose logs -f koryto    # wait for "listening on"
+cp .env.example /storage/encrypted/koryto/.env   # fill POSTGRES_PASSWORD, KORYTO_SECRET, the OIDC values
+cp Makefile.local.example Makefile.local          # RUN_DIR is already that path
+make deploy                                       # builds koryto:local here, copies the compose file, starts the stack there
+cd /storage/encrypted/koryto && docker compose logs -f koryto   # wait for "listening on"
 ```
+
+`make image` also tags the build with the commit (`koryto:<sha>`), so an
+older image is one `docker tag koryto:<sha> koryto:local` away if a deploy
+goes wrong.
+
+**Anywhere else**, a clone is enough: the compose file carries `build: .`,
+so `docker compose up -d --build` in the checkout builds and runs the stack
+in place, with `.env` and `data/` next to it.
 
 Migrations run on first start. `./data/postgres` ends up owned by uid 999,
 the image's postgres user. DataGrip reaches the database at
@@ -126,9 +136,11 @@ stopped (a live copy of `./data/postgres` is not a consistent backup).
 
 ## Updating
 
+From the development checkout, on the commit to ship:
+
 ```sh
-cd /storage/encrypted/koryto && make deploy   # pulls master, rebuilds, restarts
-docker compose logs -f koryto
+make deploy
+cd /storage/encrypted/koryto && docker compose logs -f koryto
 ```
 
 Migrations apply at startup. `koryto recompute-days` exists for the day a
