@@ -1,0 +1,7 @@
+target/
+frontend/node_modules/
+frontend/dist/
+data/
+.env
+.git/
+PLAN.md

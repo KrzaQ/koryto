@@ -1,0 +1,42 @@
+# All state lives under ./data in this checkout, not in named volumes:
+# ./data/postgres is the cluster (owned by uid 999, the image's postgres
+# user). Back up with `pg_dump` while it runs, or copy ./data with the stack
+# stopped.
+services:
+  koryto:
+    build: .
+    image: koryto:local
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:13384:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      KORYTO_DATABASE_URL: postgres://koryto:${POSTGRES_PASSWORD}@db/koryto
+      # The house zone: the origin location of every new user. TZ keeps the
+      # log timestamps on the same clock.
+      KORYTO_TIMEZONE: Europe/Warsaw
+      TZ: Europe/Warsaw
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    # postgres:18 keeps its data one level below /var/lib/postgresql, so the
+    # mount is the parent directory, not .../data as with older images.
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: koryto
+      POSTGRES_DB: koryto
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:13385:5432"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U koryto -d koryto"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
