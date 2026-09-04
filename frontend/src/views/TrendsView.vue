@@ -89,7 +89,8 @@ const axisStyle = computed(() => ({
 const base = computed(() => ({
   textStyle: { color: ink.value.text, fontFamily: 'inherit' },
   grid: { left: 56, right: 16, top: 32, bottom: 32 },
-  legend: { top: 0, left: 0, icon: 'roundRect', textStyle: { color: ink.value.muted } },
+  // Right-aligned so it never sits on the y-axis unit at the top left.
+  legend: { top: 0, right: 0, icon: 'roundRect', textStyle: { color: ink.value.muted } },
 }))
 const timeAxis = computed(() => ({
   type: 'time' as const,
@@ -97,6 +98,7 @@ const timeAxis = computed(() => ({
   max: `${to.value}T00:00:00Z`,
   ...axisStyle.value,
   splitLine: { show: false },
+  axisLabel: { color: ink.value.muted, showMinLabel: false, showMaxLabel: false },
 }))
 const dayOf = (d: string) => `${d}T00:00:00Z`
 const kg = (g: number) => `${formatKg(g)} kg`
@@ -153,7 +155,11 @@ const weightOption = computed(() => {
               silent: true,
               symbol: 'none',
               lineStyle: { color: OTHER, type: 'solid', width: 1 },
-              label: { color: ink.value.muted, formatter: `goal ${formatKg(goal)}` },
+              label: {
+                color: ink.value.muted,
+                position: 'insideEndTop',
+                formatter: `goal ${formatKg(goal)}`,
+              },
               data: [{ yAxis: goal }],
             }
           : undefined,
@@ -502,9 +508,19 @@ onMounted(load)
         What the body burns per day, derived from intake and the weight trend over a 28-day window.
         Dashed while the Mifflin-St Jeor seed stands in.
       </p>
-      <div v-if="expenditure" class="h-64 w-full" data-testid="expenditure-chart">
+      <div
+        v-if="expenditure && expenditure.days.some((d) => d.kcal !== null && d.kcal !== undefined)"
+        class="h-64 w-full"
+        data-testid="expenditure-chart"
+      >
         <VChart :option="expenditureOption" autoresize />
       </div>
+      <p v-else-if="expenditure" class="note-warn mt-2" data-testid="expenditure-empty">
+        No estimate yet. The seed needs a weigh-in plus height, birth date and sex on the
+        <RouterLink to="/profile" class="link">profile</RouterLink>; the adaptive number needs 14
+        logged days and weigh-ins 10 days apart. Sport does not enter this figure: what the body
+        burns is derived from intake and the weight trend.
+      </p>
     </section>
 
     <section class="card p-4">
