@@ -309,6 +309,54 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/stats/expenditure': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get: operations['expenditure']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/stats/weekly': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get: operations['weekly']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/stats/weight': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get: operations['weight']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/tokens': {
     parameters: {
       query?: never
@@ -541,6 +589,8 @@ export interface components {
       started_at?: string | null
       timezone?: string | null
     }
+    /** @enum {string} */
+    Basis: 'adaptive' | 'seed' | 'none'
     DayDto: {
       activities: components['schemas']['ActivityDto'][]
       /** Format: int32 */
@@ -601,6 +651,38 @@ export interface components {
     ErrorDetail: {
       code: string
       message: string
+    }
+    Estimate: {
+      basis: components['schemas']['Basis']
+      /** Format: int32 */
+      kcal?: number | null
+      logged_days: number
+      /**
+       * Format: int32
+       * @description What the seed would say, for the UI to show next to the adaptive number.
+       */
+      seed_kcal?: number | null
+      /** Format: int64 */
+      weight_span_days: number
+    }
+    ExpenditurePoint: {
+      basis: components['schemas']['Basis']
+      /** Format: date */
+      day: string
+      /** Format: int32 */
+      kcal?: number | null
+      logged_days: number
+    }
+    ExpenditureStats: {
+      days: components['schemas']['ExpenditurePoint'][]
+      /** Format: date */
+      from: string
+      /** @description As of `to` */
+      latest: components['schemas']['Estimate']
+      /** Format: date */
+      to: string
+      /** Format: int32 */
+      user_id: number
     }
     FoodDto: {
       aliases: string[]
@@ -897,6 +979,49 @@ export interface components {
       name?: string | null
       sex?: string | null
     }
+    /** @description One ISO week of a range, for the weekly balance chart. */
+    Week: {
+      /** @description Days of the week that fall inside the requested range */
+      days: number
+      logged_days: number
+      /**
+       * Format: int32
+       * @description Mean intake minus mean expenditure, when both exist
+       */
+      mean_balance_vs_expenditure?: number | null
+      /**
+       * Format: int32
+       * @description Mean intake minus target over logged days with a target
+       */
+      mean_balance_vs_target?: number | null
+      /**
+       * Format: int32
+       * @description Mean expenditure estimate over the week's days that have one
+       */
+      mean_expenditure?: number | null
+      /** Format: int32 */
+      mean_kcal?: number | null
+      /** Format: int32 */
+      sport_minutes: number
+      /**
+       * Format: date
+       * @description The Monday
+       */
+      start: string
+      /** Format: int32 */
+      total_kcal: number
+      /** @description ISO week, e.g. 2026-W36 */
+      week: string
+    }
+    WeeklyStats: {
+      /** Format: date */
+      from: string
+      /** Format: date */
+      to: string
+      /** Format: int32 */
+      user_id: number
+      weeks: components['schemas']['Week'][]
+    }
     WeightDto: {
       /** Format: int32 */
       created_by: number
@@ -934,6 +1059,28 @@ export interface components {
       measured_at?: string | null
       timezone?: string | null
       weight_kg?: string | null
+    }
+    WeightPoint: {
+      /** Format: date */
+      day: string
+      /** Format: int32 */
+      trend_g: number
+      /** Format: int32 */
+      weight_g: number
+    }
+    WeightStats: {
+      /** Format: date */
+      from: string
+      /**
+       * Format: int32
+       * @description The goal weight of the target in force on `to`, grams
+       */
+      goal_g?: number | null
+      points: components['schemas']['WeightPoint'][]
+      /** Format: date */
+      to: string
+      /** Format: int32 */
+      user_id: number
     }
   }
   responses: never
@@ -1654,6 +1801,99 @@ export interface operations {
         }
       }
       409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorBody']
+        }
+      }
+    }
+  }
+  expenditure: {
+    parameters: {
+      query: {
+        user?: number | null
+        from: string
+        to: string
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ExpenditureStats']
+        }
+      }
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorBody']
+        }
+      }
+    }
+  }
+  weekly: {
+    parameters: {
+      query: {
+        user?: number | null
+        from: string
+        to: string
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['WeeklyStats']
+        }
+      }
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorBody']
+        }
+      }
+    }
+  }
+  weight: {
+    parameters: {
+      query: {
+        user?: number | null
+        from: string
+        to: string
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['WeightStats']
+        }
+      }
+      400: {
         headers: {
           [name: string]: unknown
         }

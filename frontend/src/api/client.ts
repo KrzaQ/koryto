@@ -7,6 +7,7 @@ import type {
   ActivityPatchInput,
   DayDto,
   DaysDto,
+  ExpenditureStats,
   FoodDto,
   FoodInput,
   FoodPatchInput,
@@ -28,6 +29,8 @@ import type {
   WeightDto,
   WeightInput,
   WeightPatchInput,
+  WeightStats,
+  WeeklyStats,
 } from './types'
 
 export class ApiError extends Error {
@@ -97,6 +100,12 @@ export const api = {
       include_voided: includeVoided || undefined,
     }),
   days: (r: Range) => request<DaysDto>('GET', '/api/days', undefined, r),
+  stats: {
+    weight: (r: Range) => request<WeightStats>('GET', '/api/stats/weight', undefined, r),
+    expenditure: (r: Range) =>
+      request<ExpenditureStats>('GET', '/api/stats/expenditure', undefined, r),
+    weekly: (r: Range) => request<WeeklyStats>('GET', '/api/stats/weekly', undefined, r),
+  },
 
   profile: {
     update: (id: number, patch: ProfilePatchInput) =>

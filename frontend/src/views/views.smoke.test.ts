@@ -11,6 +11,7 @@ import LoginView from './LoginView.vue'
 import NoHouseholdView from './NoHouseholdView.vue'
 import ProfileView from './ProfileView.vue'
 import TokensView from './TokensView.vue'
+import TrendsView from './TrendsView.vue'
 
 // jsdom has neither canvas nor ResizeObserver; the chart component is replaced.
 vi.mock('vue-echarts', () => ({
@@ -204,6 +205,118 @@ function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respon
       ]),
     )
   if (path === '/api/meals' && init?.method === 'POST') return Promise.resolve(json([day.meals[0]]))
+  if (path === '/api/days')
+    return Promise.resolve(
+      json({
+        user_id: 1,
+        from: '2026-09-01',
+        to: '2026-09-04',
+        days: [
+          {
+            day: '2026-09-01',
+            logged: false,
+            kcal: null,
+            protein_g: null,
+            meals: 0,
+            meals_without_protein: 0,
+            sport_minutes: 0,
+            weight_g: null,
+            trend_g: null,
+            target_kcal: 1800,
+            balance: null,
+          },
+          {
+            day: '2026-09-02',
+            logged: true,
+            kcal: 1900,
+            protein_g: 100,
+            meals: 3,
+            meals_without_protein: 0,
+            sport_minutes: 0,
+            weight_g: 82500,
+            trend_g: 82500,
+            target_kcal: 1800,
+            balance: 100,
+          },
+          {
+            day: '2026-09-03',
+            logged: true,
+            kcal: 1700,
+            protein_g: 90,
+            meals: 2,
+            meals_without_protein: 1,
+            sport_minutes: 45,
+            weight_g: null,
+            trend_g: null,
+            target_kcal: 1800,
+            balance: -100,
+          },
+          {
+            day: '2026-09-04',
+            logged: true,
+            kcal: 1200,
+            protein_g: 22,
+            meals: 2,
+            meals_without_protein: 1,
+            sport_minutes: 90,
+            weight_g: 82400,
+            trend_g: 82490,
+            target_kcal: 1800,
+            balance: -600,
+          },
+        ],
+      }),
+    )
+  if (path === '/api/stats/weight')
+    return Promise.resolve(
+      json({
+        user_id: 1,
+        from: '2026-09-01',
+        to: '2026-09-04',
+        goal_g: 75000,
+        points: [
+          { day: '2026-09-02', weight_g: 82500, trend_g: 82500 },
+          { day: '2026-09-04', weight_g: 82400, trend_g: 82490 },
+        ],
+      }),
+    )
+  if (path === '/api/stats/expenditure')
+    return Promise.resolve(
+      json({
+        user_id: 1,
+        from: '2026-09-01',
+        to: '2026-09-04',
+        latest: { kcal: 2218, basis: 'seed', logged_days: 3, weight_span_days: 2, seed_kcal: 2218 },
+        days: ['2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04'].map((day) => ({
+          day,
+          kcal: 2218,
+          basis: 'seed',
+          logged_days: 3,
+        })),
+      }),
+    )
+  if (path === '/api/stats/weekly')
+    return Promise.resolve(
+      json({
+        user_id: 1,
+        from: '2026-09-01',
+        to: '2026-09-04',
+        weeks: [
+          {
+            week: '2026-W36',
+            start: '2026-08-31',
+            days: 4,
+            logged_days: 3,
+            mean_kcal: 1600,
+            total_kcal: 4800,
+            sport_minutes: 135,
+            mean_balance_vs_target: -200,
+            mean_expenditure: 2218,
+            mean_balance_vs_expenditure: -618,
+          },
+        ],
+      }),
+    )
   return Promise.resolve(
     new Response(
       JSON.stringify({ error: { code: 'not_found', message: `no fixture for ${url}` } }),
@@ -307,6 +420,28 @@ describe('views', () => {
     expect(w.findAll('[data-testid="token-row"]')).toHaveLength(2)
     expect(w.text()).toContain('delegate')
     expect(w.text()).toContain('Alice')
+    expect(errors).toEqual([])
+  })
+
+  it('TrendsView', async () => {
+    const w = await render(TrendsView)
+    expect(w.find('[data-testid="trend-tiles"]').text()).toContain('2218')
+    expect(w.find('[data-testid="trend-tiles"]').text()).toContain('82.49')
+    expect(w.find('[data-testid="trend-tiles"]').text()).toContain('3')
+    for (const id of [
+      'weight-chart',
+      'intake-chart',
+      'expenditure-chart',
+      'balance-chart',
+      'sport-chart',
+      'calendar-chart',
+    ])
+      expect(w.find(`[data-testid="${id}"]`).exists(), id).toBe(true)
+    await w.find('input[type="checkbox"]').setValue(true)
+    expect(w.find('[data-testid="trends-table"]').text()).toContain('2026-W36')
+    expect(w.find('[data-testid="trends-table"]').text()).toContain('−618')
+    await w.find('[data-testid="balance-mode"] button:last-child').trigger('click')
+    expect(calls.some((c) => c.startsWith('GET /api/stats/weekly?user=1'))).toBe(true)
     expect(errors).toEqual([])
   })
 
