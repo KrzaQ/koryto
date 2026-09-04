@@ -7,8 +7,9 @@ mod cli;
 mod config;
 mod db;
 mod domain;
+mod http;
 
-use anyhow::{Result, bail};
+use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 use crate::db::Db;
@@ -64,12 +65,15 @@ async fn connect() -> Result<Db> {
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
         .with_writer(std::io::stderr)
         .init();
     let cli = Cli::parse();
     match cli.command {
-        Command::Serve => bail!("not implemented"),
+        Command::Serve => http::serve(config::Config::from_env()?).await,
         Command::Migrate { status } => cli::migrate::run(&connect().await?, status).await,
         Command::Token { command } => cli::token::run(&connect().await?, command).await,
         Command::Household { command } => cli::household::run(&connect().await?, command).await,
