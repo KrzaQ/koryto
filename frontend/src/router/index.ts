@@ -17,14 +17,6 @@ const router = createRouter({
       name: 'day',
       component: () => import('@/views/DayView.vue'),
       props: true,
-      beforeEnter: (to) => {
-        const d = String(to.params.day)
-        if (d === 'today') {
-          const session = useSession()
-          return `/d/${session.me?.today ?? new Date().toISOString().slice(0, 10)}`
-        }
-        return isDay(d) ? true : '/d/today'
-      },
     },
     { path: '/trends', name: 'trends', component: () => import('@/views/TrendsView.vue') },
     { path: '/foods', name: 'foods', component: () => import('@/views/FoodsView.vue') },
@@ -47,6 +39,13 @@ router.beforeEach(async (to) => {
   const session = useSession()
   if (!session.checked) await session.load()
   if (!session.me) return { name: 'login', query: { next: to.fullPath } }
+  // "today" and bad dates are resolved here rather than in a beforeEnter,
+  // which does not run when only the :day parameter changes.
+  if (to.name === 'day') {
+    const d = String(to.params.day)
+    if (d === 'today') return `/d/${session.me.today}`
+    if (!isDay(d)) return `/d/${session.me.today}`
+  }
   return true
 })
 
