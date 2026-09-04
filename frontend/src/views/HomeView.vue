@@ -174,7 +174,7 @@ function ledger(d: DayDto): { food: Line; tail: Line[] } {
             <tr v-if="!d.meals.length" class="border-t border-edge">
               <td class="py-1 text-muted" colspan="3">Nothing logged.</td>
             </tr>
-            <tr class="border-t border-edge">
+            <tr v-if="d.meals.length" class="border-t border-edge">
               <td></td>
               <td class="py-1 text-muted">{{ ledger(d).food.label }}</td>
               <td class="py-1 text-right font-medium tabular-nums text-danger">
@@ -219,11 +219,6 @@ function ledger(d: DayDto): { food: Line; tail: Line[] } {
       </section>
     </div>
 
-    <BudgetChart
-      v-if="week && week.logged_days > 0"
-      :week="week"
-      :today="today"
-      data-testid="home-chart"
-    />
+    <BudgetChart v-if="week && week.logged_days > 0" :week="week" :today="today" />
   </main>
 </template>

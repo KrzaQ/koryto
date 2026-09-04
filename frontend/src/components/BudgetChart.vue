@@ -87,7 +87,6 @@ const option = computed(() => ({
     {
       name: 'Sport',
       type: 'bar',
-      stack: 'day',
       barMaxWidth: 44,
       // The hole the session dug, below the line.
       data: estimates.value.map((e) => -e.sport_kcal),
@@ -95,12 +94,13 @@ const option = computed(() => ({
     {
       name: 'Intake',
       type: 'bar',
-      stack: 'day',
+      // Same slot as the sport, both measured from zero, so the column is
+      // the day's intake split at the line and its top is what the base has
+      // to cover. Stacking them instead would put the food below the sport
+      // on a morning when the session outweighs what has been eaten so far.
+      barGap: '-100%',
       barMaxWidth: 44,
-      // The food that is left once the sport is paid back, drawn from zero
-      // up. With the sport below, the whole column is the day's intake and
-      // splits at the line; stacking the full intake instead would paint
-      // over the sport segment.
+      // What is left of the food once the sport is paid back.
       data: rows.value.map((r, i) =>
         r.kcal == null ? null : r.kcal - (estimates.value[i]?.sport_kcal ?? 0),
       ),
