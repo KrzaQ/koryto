@@ -2,8 +2,8 @@
 # Scratch PostgreSQL for development and sandbox tests, run FROM THE HOST
 # with the host's docker.
 #
-# Publishes on the wired address so a limes sandbox can reach it (the sandbox
-# sees the host at <host>, never at localhost). Two databases: koryto_scratch
+# Publishes on SCRATCH_PG_BIND, the address a limes sandbox sees the host at
+# (never localhost; the wired address of the sandbox network). Two databases: koryto_scratch
 # for `make dev-backend` and psql poking, and koryto_test as the maintenance
 # database for scripts/test-db.sh (the suite creates and drops per-test
 # databases next to it). Data lives under ./data/scratch-pg so `down --purge`
@@ -17,7 +17,7 @@
 set -euo pipefail
 
 NAME=${SCRATCH_PG_NAME:-koryto-scratch-pg}
-BIND=${SCRATCH_PG_BIND:-<host>}
+BIND=${SCRATCH_PG_BIND:?set SCRATCH_PG_BIND to the address the sandbox reaches the host at}
 PORT=${SCRATCH_PG_PORT:-15434}
 USER_=${SCRATCH_PG_USER:-koryto}
 PASS=${SCRATCH_PG_PASSWORD:-scratch}

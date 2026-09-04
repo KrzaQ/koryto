@@ -62,7 +62,7 @@ those; it lists them as outstanding.
 - **PostgreSQL 18 as a compose sidecar, one app container**, published on
   `127.0.0.1:13384` (app) and `127.0.0.1:13385` (db, for DataGrip), fronted by
   the house apache vhost at `https://koryto.int.krzaq.cc`. support-ui holds
-  13382/13383; the scratch Postgres for development is on `<host>:15434`
+  13382/13383; the scratch Postgres for development is on port 15434 of the host address the sandbox sees
   (support-ui's is 15433).
 - **Auth is OIDC in-app against authentik**, group `koryto`, exactly as
   support-ui. Tokens: `read`, `write` (log entries, add foods, set location),
@@ -89,7 +89,7 @@ read-only, an empty `$HOME`, the rust toolchain and npm cache mounted in via
 works, the `postgres` image cannot drop privileges under the sandbox's
 single-uid mapping and never comes up, so **the database for tests is
 `TEST_DATABASE_URL`**, which
-`.limes.local.toml` exports as `postgres://koryto:scratch@<host>:15434/koryto_test`.
+`.limes.local.toml` exports as `postgres://koryto:scratch@<host>:15434/koryto_test`, where `<host>` is the address the sandbox sees the host at.
 That database lives in the scratch Postgres that `scripts/scratch-pg.sh up`
 starts on the host (it creates both `koryto_scratch` for development and
 `koryto_test` for tests). If `TEST_DATABASE_URL` is set but unreachable, the
