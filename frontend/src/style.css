@@ -1,0 +1,110 @@
+@import 'tailwindcss';
+
+/* Theme tokens. The store stamps data-theme="light" or "dark" on <html>;
+   "system" resolves to one of those before it lands here. */
+:root {
+  color-scheme: light;
+  --canvas: #f7f6f3;
+  --surface: #ffffff;
+  --surface-2: #f0efeb;
+  --surface-3: #e4e2dc;
+  --edge: #dedbd4;
+  --fg: #1a1917;
+  --muted: #5d5b55;
+  --faint: #9b988f;
+  --accent: #2a78d6;
+  --accent-strong: #1c5cab;
+  --accent-soft: #e6f0fb;
+  --ok: #0f7a3d;
+  --ok-soft: #e3f5ea;
+  --warn: #8a5a00;
+  --warn-soft: #fbf1d9;
+  --danger: #b3261e;
+  --danger-soft: #fbe7e5;
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --canvas: #131311;
+  --surface: #1c1c1a;
+  --surface-2: #252523;
+  --surface-3: #33332f;
+  --edge: #3a3a36;
+  --fg: #ecebe6;
+  --muted: #b3b1a8;
+  --faint: #76746c;
+  --accent: #5598e7;
+  --accent-strong: #86b6ef;
+  --accent-soft: #1b2c42;
+  --ok: #4fc47f;
+  --ok-soft: #14301f;
+  --warn: #e0a83a;
+  --warn-soft: #33270d;
+  --danger: #f07a72;
+  --danger-soft: #3b1a18;
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-edge: var(--edge);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-soft: var(--accent-soft);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+}
+
+@layer base {
+  html {
+    background: var(--canvas);
+    color: var(--fg);
+  }
+  input,
+  select,
+  textarea {
+    @apply rounded border border-edge bg-surface px-2 py-1 text-sm text-fg focus:border-accent focus:outline-none;
+  }
+  button {
+    @apply cursor-pointer;
+  }
+}
+
+@utility btn {
+  @apply inline-flex items-center gap-1 rounded bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-strong disabled:cursor-default disabled:opacity-50;
+}
+@utility btn-secondary {
+  @apply inline-flex items-center gap-1 rounded border border-edge bg-surface px-3 py-1.5 text-sm font-medium text-fg hover:bg-surface-2 disabled:opacity-50;
+}
+@utility btn-danger {
+  @apply inline-flex items-center gap-1 rounded bg-danger px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50;
+}
+@utility link {
+  @apply text-accent underline-offset-2 hover:underline;
+}
+@utility card {
+  @apply rounded-lg border border-edge bg-surface;
+}
+@utility table-head {
+  @apply bg-surface-2 text-left text-xs tracking-wide text-muted uppercase;
+}
+@utility note-danger {
+  @apply rounded border border-danger/40 bg-danger-soft px-3 py-2 text-sm text-danger;
+}
+@utility note-warn {
+  @apply rounded border border-warn/40 bg-warn-soft px-3 py-2 text-sm text-warn;
+}
+@utility note-ok {
+  @apply rounded-lg border border-ok/40 bg-ok-soft p-4 text-sm text-ok;
+}
+@utility chip {
+  @apply rounded bg-surface-3 px-1.5 py-0.5 text-xs text-muted;
+}
