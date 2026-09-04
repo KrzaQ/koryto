@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// The mark: a rounded tile with a trough, which is what koryto means.
+// The mark: a rounded tile with a fed trough, which is what koryto means.
 // Same drawing as public/favicon.svg.
 withDefaults(defineProps<{ size?: number; wordmark?: boolean }>(), { size: 28, wordmark: true })
 </script>
@@ -20,20 +20,13 @@ withDefaults(defineProps<{ size?: number; wordmark?: boolean }>(), { size: 28, w
         </linearGradient>
       </defs>
       <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#koryto-tile)" />
-      <path
-        d="M12 24h40l-6 20H18z"
-        fill="none"
-        stroke="#ffffff"
-        stroke-width="5"
-        stroke-linejoin="round"
-      />
-      <path
-        d="M22 24v-6M42 24v-6"
-        stroke="#ffffff"
-        stroke-width="4"
-        stroke-linecap="round"
-        opacity="0.85"
-      />
+      <g fill="#ffffff">
+        <path d="M15 21C19 9 45 9 49 21Z" />
+        <rect x="9" y="19" width="46" height="6" rx="2" />
+        <path d="M13 25h38l-5 19H18z" />
+        <rect x="17" y="44" width="6" height="9" rx="1.5" />
+        <rect x="41" y="44" width="6" height="9" rx="1.5" />
+      </g>
     </svg>
     <span v-if="wordmark" class="text-lg font-semibold tracking-tight text-fg">koryto</span>
   </span>
