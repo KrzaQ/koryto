@@ -39,9 +39,17 @@ CORS, no `/api` bypass and no websocket rewrite.
 
 ## 3. Deploy
 
+The deployment is its own ZFS dataset, `storage/encrypted/koryto`, mounted at
+`/storage/encrypted/koryto`: a clone of the repo with `.env`, a
+`Makefile.local` whose `deploy` pulls and rebuilds, and `data/postgres`. The
+checkout under `~/code` is for development only and runs nothing.
+
 ```sh
+sudo zfs create -o compression=zstd storage/encrypted/koryto
+sudo chown krzaq:krzaq /storage/encrypted/koryto
+git clone ssh://git@forgejo.krzaq.cc/krzaq/koryto.git /storage/encrypted/koryto
+cd /storage/encrypted/koryto
 cp .env.example .env            # fill POSTGRES_PASSWORD, KORYTO_SECRET, the OIDC values
-mkdir -p data/postgres
 docker compose up -d --build     # or: make deploy (Makefile.local)
 docker compose logs -f koryto    # wait for "listening on"
 ```
@@ -119,7 +127,7 @@ stopped (a live copy of `./data/postgres` is not a consistent backup).
 ## Updating
 
 ```sh
-git pull && make deploy          # Makefile.local
+cd /storage/encrypted/koryto && make deploy   # pulls master, rebuilds, restarts
 docker compose logs -f koryto
 ```
 
