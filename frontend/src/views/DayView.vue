@@ -3,7 +3,15 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ApiError, api } from '@/api/client'
-import type { ActivityDto, DayDto, MealInput, MealPatchInput, WeightDto } from '@/api/types'
+import type {
+  ActivityDto,
+  DayDto,
+  MealInput,
+  MealPatchInput,
+  Summary,
+  WeightDto,
+} from '@/api/types'
+import BudgetChart from '@/components/BudgetChart.vue'
 import DayHeader from '@/components/DayHeader.vue'
 import MealEditor from '@/components/MealEditor.vue'
 import { dayLabel, shiftDay } from '@/lib/day'
@@ -20,6 +28,8 @@ const person = usePerson()
 const tz = useTimezone()
 
 const data = ref<DayDto | null>(null)
+// The six days before this one and this one: the week card and the chart.
+const week = ref<Summary | null>(null)
 const error = ref<string | null>(null)
 const busy = ref(false)
 const showVoided = ref(false)
@@ -40,7 +50,15 @@ const zoneNote = computed(() => {
 async function load() {
   error.value = null
   try {
-    data.value = await api.day(person.id, props.day, showVoided.value)
+    // The week is context: if it fails the day still shows.
+    const [day, summary] = await Promise.all([
+      api.day(person.id, props.day, showVoided.value),
+      api.stats
+        .summary({ user: person.id, from: shiftDay(props.day, -6), to: props.day })
+        .catch(() => null),
+    ])
+    data.value = day
+    week.value = summary
   } catch (e) {
     error.value = e instanceof ApiError ? e.message : String(e)
   }
@@ -167,7 +185,13 @@ onMounted(load)
     <p v-if="error" class="note-danger" data-testid="error">{{ error }}</p>
 
     <template v-if="data">
-      <DayHeader :day="data" />
+      <DayHeader :day="data" :week="week" :is-today="isToday" />
+
+      <BudgetChart
+        v-if="week && week.logged_days > 0"
+        :week="week"
+        :today="session.me?.today ?? ''"
+      />
 
       <section class="card overflow-x-auto">
         <table class="w-full text-sm">

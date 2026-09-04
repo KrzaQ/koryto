@@ -628,6 +628,22 @@ export interface components {
       user_id: number
       weights: components['schemas']['WeightDto'][]
     }
+    /** @description One day's estimate, flattened for the wire. */
+    DayEstimate: {
+      /** Format: int32 */
+      base_kcal?: number | null
+      basis: components['schemas']['Basis']
+      /** Format: date */
+      day: string
+      /**
+       * Format: int32
+       * @description Base plus the day's sport
+       */
+      kcal?: number | null
+      logged_days: number
+      /** Format: int32 */
+      sport_kcal: number
+    }
     /** @description One calendar day of a range. */
     DayRow: {
       /** Format: int32 */
@@ -706,23 +722,8 @@ export interface components {
       /** Format: int64 */
       weight_span_days: number
     }
-    ExpenditurePoint: {
-      /** Format: int32 */
-      base_kcal?: number | null
-      basis: components['schemas']['Basis']
-      /** Format: date */
-      day: string
-      /**
-       * Format: int32
-       * @description Base plus the day's sport
-       */
-      kcal?: number | null
-      logged_days: number
-      /** Format: int32 */
-      sport_kcal: number
-    }
     ExpenditureStats: {
-      days: components['schemas']['ExpenditurePoint'][]
+      days: components['schemas']['DayEstimate'][]
       /** Format: date */
       from: string
       /** @description As of `to` */
@@ -929,6 +930,8 @@ export interface components {
       days: number
       /** @description As of the last day of the range */
       expenditure: components['schemas']['Estimate']
+      /** @description One per row, same order: what each day's burn was made of */
+      expenditure_days: components['schemas']['DayEstimate'][]
       /** Format: date */
       from: string
       logged_days: number

@@ -2,13 +2,11 @@
 // The day at a glance: how much room is left today, how the last week went,
 // protein, sport. Room is measured against what the body burns (base plus
 // the day's sport) when an estimate exists, else against the target.
-import { computed, ref, watch } from 'vue'
-import { api } from '@/api/client'
+import { computed } from 'vue'
 import type { DayDto, Summary } from '@/api/types'
-import { shiftDay } from '@/lib/day'
 import { formatMinutes, signed } from '@/lib/units'
 
-const props = defineProps<{ day: DayDto }>()
+const props = defineProps<{ day: DayDto; week: Summary | null; isToday: boolean }>()
 
 const target = computed(() => props.day.target?.kcal ?? null)
 const burn = computed(() => props.day.expenditure)
@@ -28,23 +26,8 @@ const pct = computed(() =>
 )
 const vsTarget = computed(() => (target.value !== null ? target.value - eaten.value : null))
 
-const week = ref<Summary | null>(null)
-async function loadWeek() {
-  try {
-    week.value = await api.stats.summary({
-      user: props.day.user_id,
-      from: shiftDay(props.day.day, -6),
-      to: props.day.day,
-    })
-  } catch {
-    week.value = null
-  }
-}
-watch(() => [props.day.day, props.day.user_id, props.day.totals.kcal], loadWeek, {
-  immediate: true,
-})
 const weekRoom = computed(() => {
-  const w = week.value
+  const w = props.week
   if (!w) return null
   if (w.mean_balance_vs_expenditure != null)
     return { kind: 'burn' as const, kcal: -w.mean_balance_vs_expenditure }
@@ -56,7 +39,9 @@ const weekRoom = computed(() => {
 <template>
   <div class="grid gap-4 md:grid-cols-5" data-testid="day-header">
     <div class="card p-4 md:col-span-2" data-testid="budget-card">
-      <div class="text-xs tracking-wide text-muted uppercase">Budget today</div>
+      <div class="text-xs tracking-wide text-muted uppercase">
+        Budget{{ isToday ? ' today' : '' }}
+      </div>
       <div class="mt-1 flex items-baseline gap-2">
         <template v-if="room !== null">
           <span
@@ -111,7 +96,9 @@ const weekRoom = computed(() => {
       </div>
     </div>
     <div class="card p-4" data-testid="week-card">
-      <div class="text-xs tracking-wide text-muted uppercase">Last 7 days</div>
+      <div class="text-xs tracking-wide text-muted uppercase">
+        {{ isToday ? 'Last 7 days' : 'The 7 days to it' }}
+      </div>
       <div class="mt-1 flex items-baseline gap-2">
         <template v-if="weekRoom">
           <span

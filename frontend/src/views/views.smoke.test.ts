@@ -192,6 +192,16 @@ function json(data: unknown) {
 }
 
 const calls: string[] = []
+const week = [
+  '2026-08-29',
+  '2026-08-30',
+  '2026-08-31',
+  '2026-09-01',
+  '2026-09-02',
+  '2026-09-03',
+  '2026-09-04',
+]
+
 function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const url = String(input)
   const path = url.split('?')[0]!
@@ -345,7 +355,28 @@ function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respon
           readings: 2,
         },
         expenditure: day.expenditure,
-        rows: [],
+        rows: week.map((d, i) => ({
+          day: d,
+          logged: true,
+          kcal: 1900 + i * 50,
+          protein_g: 80,
+          meals: 3,
+          meals_without_protein: 0,
+          sport_minutes: i === 6 ? 90 : 0,
+          sport_kcal: i === 6 ? 600 : null,
+          weight_g: null,
+          trend_g: null,
+          target_kcal: 1800,
+          balance: 100 + i * 50,
+        })),
+        expenditure_days: week.map((d, i) => ({
+          day: d,
+          kcal: i === 6 ? 2818 : 2218,
+          base_kcal: 2218,
+          sport_kcal: i === 6 ? 600 : 0,
+          basis: 'seed',
+          logged_days: 3,
+        })),
       }),
     )
   if (path === '/api/stats/weekly')
@@ -424,6 +455,7 @@ describe('views', () => {
     expect(w.find('[data-testid="week-room"]').text()).toBe('+400')
     expect(w.find('[data-testid="week-card"]').text()).toContain('900 kcal of sport')
     expect(w.find('[data-testid="sport-card"]').text()).toContain('600 kcal')
+    expect(w.find('[data-testid="budget-chart"]').exists()).toBe(true)
     expect(
       calls.some((c) =>
         c.startsWith('GET /api/stats/summary?user=1&from=2026-08-29&to=2026-09-04'),
