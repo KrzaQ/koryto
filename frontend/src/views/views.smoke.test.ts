@@ -125,11 +125,26 @@ const day = {
       voided: false,
     },
   ],
-  totals: { kcal: 1200, protein_g: 22, meals: 2, meals_without_protein: 1, sport_minutes: 90 },
+  totals: {
+    kcal: 1200,
+    protein_g: 22,
+    meals: 2,
+    meals_without_protein: 1,
+    sport_minutes: 90,
+    sport_kcal: 600,
+  },
   target: me.target,
   balance: -600,
-  expenditure: { kcal: 2218, basis: 'seed', logged_days: 3, weight_span_days: 2, seed_kcal: 2218 },
-  balance_vs_expenditure: -1018,
+  expenditure: {
+    kcal: 2818,
+    base_kcal: 2218,
+    sport_kcal: 600,
+    basis: 'seed',
+    logged_days: 3,
+    weight_span_days: 2,
+    seed_kcal: 2218,
+  },
+  balance_vs_expenditure: -1618,
 }
 const foods = [
   {
@@ -287,13 +302,50 @@ function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respon
         user_id: 1,
         from: '2026-09-01',
         to: '2026-09-04',
-        latest: { kcal: 2218, basis: 'seed', logged_days: 3, weight_span_days: 2, seed_kcal: 2218 },
+        latest: {
+          kcal: 2218,
+          base_kcal: 2218,
+          sport_kcal: 0,
+          basis: 'seed',
+          logged_days: 3,
+          weight_span_days: 2,
+          seed_kcal: 2218,
+        },
         days: ['2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04'].map((day) => ({
           day,
           kcal: 2218,
+          base_kcal: 2218,
+          sport_kcal: 0,
           basis: 'seed',
           logged_days: 3,
         })),
+      }),
+    )
+  if (path === '/api/stats/summary')
+    return Promise.resolve(
+      json({
+        from: '2026-08-29',
+        to: '2026-09-04',
+        days: 7,
+        logged_days: 5,
+        mean_kcal: 1900,
+        mean_protein_g: 80,
+        total_kcal: 9500,
+        sport_minutes: 150,
+        sport_kcal: 900,
+        mean_balance: 100,
+        mean_expenditure: 2300,
+        mean_balance_vs_expenditure: -400,
+        weight: {
+          first_g: 82500,
+          last_g: 82400,
+          trend_first_g: 82500,
+          trend_last_g: 82490,
+          trend_delta_g: -10,
+          readings: 2,
+        },
+        expenditure: day.expenditure,
+        rows: [],
       }),
     )
   if (path === '/api/stats/weekly')
@@ -363,9 +415,20 @@ describe('views', () => {
     expect(w.findAll('[data-testid="meal-row"]')).toHaveLength(2)
     expect(w.text()).toContain('Lentil curry')
     expect(w.text()).toContain('× 1.5')
-    expect(w.find('[data-testid="balance"]').text()).toBe('−600')
-    expect(w.find('[data-testid="balance-vs-expenditure"]').text()).toBe('−1018')
-    expect(w.find('[data-testid="expenditure-card"]').text()).toContain('2218')
+    // 2818 burnt (2218 base + 600 swim) minus 1200 eaten: 1618 left; the
+    // target of 1800 leaves 600.
+    expect(w.find('[data-testid="room"]').text()).toBe('1618')
+    expect(w.find('[data-testid="budget-card"]').text()).toContain('kcal left')
+    expect(w.find('[data-testid="budget-note"]').text()).toContain('2218 base + 600 sport')
+    expect(w.find('[data-testid="balance"]').text()).toBe('600 under')
+    expect(w.find('[data-testid="week-room"]').text()).toBe('+400')
+    expect(w.find('[data-testid="week-card"]').text()).toContain('900 kcal of sport')
+    expect(w.find('[data-testid="sport-card"]').text()).toContain('600 kcal')
+    expect(
+      calls.some((c) =>
+        c.startsWith('GET /api/stats/summary?user=1&from=2026-08-29&to=2026-09-04'),
+      ),
+    ).toBe(true)
     expect(w.findAll('[data-testid="weight-row"]')).toHaveLength(1)
     expect(w.findAll('[data-testid="activity-row"]')).toHaveLength(1)
     expect(w.text()).toContain('1 meal without protein')

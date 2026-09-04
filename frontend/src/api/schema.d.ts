@@ -325,6 +325,22 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/stats/summary': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get: operations['summary']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/stats/weekly': {
     parameters: {
       query?: never
@@ -628,6 +644,11 @@ export interface components {
       meals_without_protein: number
       /** Format: int32 */
       protein_g?: number | null
+      /**
+       * Format: int32
+       * @description Sum over the sport entries that carry kcal; null when none do
+       */
+      sport_kcal?: number | null
       /** Format: int32 */
       sport_minutes: number
       /** Format: int32 */
@@ -660,25 +681,45 @@ export interface components {
       message: string
     }
     Estimate: {
+      /**
+       * Format: int32
+       * @description What the body spends on a day without sport, by `basis`.
+       */
+      base_kcal?: number | null
       basis: components['schemas']['Basis']
-      /** Format: int32 */
+      /**
+       * Format: int32
+       * @description The day's expenditure: `base_kcal` plus `sport_kcal`. None with basis `none`.
+       */
       kcal?: number | null
       logged_days: number
       /**
        * Format: int32
-       * @description What the seed would say, for the UI to show next to the adaptive number.
+       * @description What the seed would say for the base, for the UI to show next to the adaptive number.
        */
       seed_kcal?: number | null
+      /**
+       * Format: int32
+       * @description The sport kcal logged on the day, added on top of the base.
+       */
+      sport_kcal: number
       /** Format: int64 */
       weight_span_days: number
     }
     ExpenditurePoint: {
+      /** Format: int32 */
+      base_kcal?: number | null
       basis: components['schemas']['Basis']
       /** Format: date */
       day: string
-      /** Format: int32 */
+      /**
+       * Format: int32
+       * @description Base plus the day's sport
+       */
       kcal?: number | null
       logged_days: number
+      /** Format: int32 */
+      sport_kcal: number
     }
     ExpenditureStats: {
       days: components['schemas']['ExpenditurePoint'][]
@@ -884,6 +925,52 @@ export interface components {
       /** @description female or male, for the Mifflin-St Jeor seed */
       sex?: string | null
     }
+    Summary: {
+      days: number
+      /** @description As of the last day of the range */
+      expenditure: components['schemas']['Estimate']
+      /** Format: date */
+      from: string
+      logged_days: number
+      /**
+       * Format: int32
+       * @description Mean balance against the target over logged days with a target
+       */
+      mean_balance?: number | null
+      /**
+       * Format: int32
+       * @description Mean intake minus expenditure over logged days with an estimate
+       */
+      mean_balance_vs_expenditure?: number | null
+      /**
+       * Format: int32
+       * @description Mean expenditure (base plus sport) over logged days with an estimate
+       */
+      mean_expenditure?: number | null
+      /**
+       * Format: int32
+       * @description Over logged days
+       */
+      mean_kcal?: number | null
+      /**
+       * Format: int32
+       * @description Over logged days that have any protein
+       */
+      mean_protein_g?: number | null
+      rows: components['schemas']['DayRow'][]
+      /**
+       * Format: int32
+       * @description Sum of the sport kcal logged in the range
+       */
+      sport_kcal: number
+      /** Format: int32 */
+      sport_minutes: number
+      /** Format: date */
+      to: string
+      /** Format: int32 */
+      total_kcal: number
+      weight: components['schemas']['WeightSummary']
+    }
     TargetDto: {
       /** Format: int32 */
       id: number
@@ -967,6 +1054,11 @@ export interface components {
        * @description Sum over the meals that have protein; null when none do
        */
       protein_g?: number | null
+      /**
+       * Format: int32
+       * @description Sum over the sport entries that carry kcal; null when none do
+       */
+      sport_kcal?: number | null
       /** Format: int32 */
       sport_minutes: number
     }
@@ -993,7 +1085,7 @@ export interface components {
       logged_days: number
       /**
        * Format: int32
-       * @description Mean intake minus mean expenditure, when both exist
+       * @description Mean intake minus expenditure over logged days with an estimate
        */
       mean_balance_vs_expenditure?: number | null
       /**
@@ -1003,11 +1095,16 @@ export interface components {
       mean_balance_vs_target?: number | null
       /**
        * Format: int32
-       * @description Mean expenditure estimate over the week's days that have one
+       * @description Mean expenditure estimate (base plus sport) over the week's days that have one
        */
       mean_expenditure?: number | null
       /** Format: int32 */
       mean_kcal?: number | null
+      /**
+       * Format: int32
+       * @description Sum of the sport kcal logged that week
+       */
+      sport_kcal: number
       /** Format: int32 */
       sport_minutes: number
       /**
@@ -1088,6 +1185,22 @@ export interface components {
       to: string
       /** Format: int32 */
       user_id: number
+    }
+    WeightSummary: {
+      /**
+       * Format: int32
+       * @description First and last readings in the range, grams
+       */
+      first_g?: number | null
+      /** Format: int32 */
+      last_g?: number | null
+      readings: number
+      /** Format: int32 */
+      trend_delta_g?: number | null
+      /** Format: int32 */
+      trend_first_g?: number | null
+      /** Format: int32 */
+      trend_last_g?: number | null
     }
   }
   responses: never
@@ -1836,6 +1949,37 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['ExpenditureStats']
+        }
+      }
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorBody']
+        }
+      }
+    }
+  }
+  summary: {
+    parameters: {
+      query: {
+        user?: number | null
+        from: string
+        to: string
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Summary']
         }
       }
       400: {

@@ -27,7 +27,7 @@ const profile = reactive({
   height_cm: '',
   born_on: '',
   sex: '',
-  activity_factor: '1.40',
+  activity_factor: '1.20',
   loaded: false,
 })
 const isMe = computed(() => person.isMe)
@@ -183,8 +183,10 @@ onMounted(load)
     <section class="card p-4" data-testid="profile-form">
       <h2 class="text-sm font-medium tracking-wide text-muted uppercase">Settings</h2>
       <p class="mt-1 text-xs text-muted">
-        Height, birth date and sex only feed the Mifflin-St Jeor seed shown until there is enough
-        data for the adaptive expenditure estimate. The day boundary is when a new day starts.
+        Height, birth date and sex feed the Mifflin-St Jeor seed shown until there is enough data
+        for the adaptive expenditure estimate. The activity factor covers everything but logged
+        sport (1.2 for a desk job, 1.375 on your feet a lot, 1.55 for physical work); sport kcal are
+        added per day on top. The day boundary is when a new day starts.
       </p>
       <p v-if="!profile.loaded" class="mt-3 text-sm text-muted">
         Another member's settings are edited from their own login.
@@ -198,7 +200,7 @@ onMounted(load)
           >Activity factor<br /><input
             v-model="profile.activity_factor"
             class="w-full"
-            placeholder="1.40"
+            placeholder="1.20"
         /></label>
         <label class="text-sm"
           >Height (cm)<br /><input v-model="profile.height_cm" class="w-full" inputmode="decimal"

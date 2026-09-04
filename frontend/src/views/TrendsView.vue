@@ -225,14 +225,18 @@ const intakeOption = computed(() => ({
 
 const expenditureOption = computed(() => {
   const pts = expenditure.value?.days ?? []
-  const adaptive = pts.map((p) => (p.basis === 'adaptive' ? p.kcal : null))
-  const seed = pts.map((p) => (p.basis === 'seed' ? p.kcal : null))
+  // The base is the smooth line; the day's sport sits on it as bars, so a
+  // swim shows as the bump it is without bending the trend.
+  const adaptive = pts.map((p) => (p.basis === 'adaptive' ? p.base_kcal : null))
+  const seed = pts.map((p) => (p.basis === 'seed' ? p.base_kcal : null))
+  const sport = pts.map((p) => (p.sport_kcal ? p.sport_kcal : null))
   return {
     ...base.value,
     color: [
       seriesColor(SLOT.expenditure, theme.resolved),
       seriesColor(SLOT.expenditure, theme.resolved),
       seriesColor(SLOT.intake, theme.resolved),
+      seriesColor(SLOT.sport, theme.resolved),
     ],
     tooltip: {
       trigger: 'axis',
@@ -253,7 +257,7 @@ const expenditureOption = computed(() => {
     },
     series: [
       {
-        name: 'Expenditure',
+        name: 'Base expenditure',
         type: 'line',
         showSymbol: false,
         lineStyle: { width: 2 },
@@ -272,6 +276,12 @@ const expenditureOption = computed(() => {
         showSymbol: false,
         lineStyle: { width: 2 },
         data: intake7.value,
+      },
+      {
+        name: 'Sport kcal',
+        type: 'bar',
+        barMaxWidth: 12,
+        data: sport,
       },
     ],
   }
@@ -434,10 +444,10 @@ onMounted(load)
 
     <div class="grid gap-4 md:grid-cols-3" data-testid="trend-tiles">
       <div class="card p-4">
-        <div class="text-xs tracking-wide text-muted uppercase">Expenditure now</div>
+        <div class="text-xs tracking-wide text-muted uppercase">Base expenditure</div>
         <div class="mt-1 flex items-baseline gap-2">
-          <span class="text-2xl font-semibold tabular-nums">{{ latest?.kcal ?? '—' }}</span>
-          <span class="text-sm text-muted">kcal/day</span>
+          <span class="text-2xl font-semibold tabular-nums">{{ latest?.base_kcal ?? '—' }}</span>
+          <span class="text-sm text-muted">kcal/day, plus the day's sport</span>
         </div>
         <div class="mt-1 text-xs text-muted">
           <template v-if="latest?.basis === 'adaptive'"
@@ -505,8 +515,9 @@ onMounted(load)
     <section class="card p-4">
       <h2 class="text-sm font-medium tracking-wide text-muted uppercase">Expenditure</h2>
       <p class="text-xs text-muted">
-        What the body burns per day, derived from intake and the weight trend over a 28-day window.
-        Dashed while the Mifflin-St Jeor seed stands in.
+        The base is what the body burns on a day without sport, derived from intake, sport and the
+        weight trend over a 28-day window; dashed while the Mifflin-St Jeor seed stands in. The bars
+        are the sport kcal logged that day, which add to that day's burn.
       </p>
       <div
         v-if="expenditure && expenditure.days.some((d) => d.kcal !== null && d.kcal !== undefined)"
@@ -518,8 +529,8 @@ onMounted(load)
       <p v-else-if="expenditure" class="note-warn mt-2" data-testid="expenditure-empty">
         No estimate yet. The seed needs a weigh-in plus height, birth date and sex on the
         <RouterLink to="/profile" class="link">profile</RouterLink>; the adaptive number needs 14
-        logged days and weigh-ins 10 days apart. Sport does not enter this figure: what the body
-        burns is derived from intake and the weight trend.
+        logged days and weigh-ins 10 days apart. Sport kcal add to the day's burn once there is a
+        base to add them to.
       </p>
     </section>
 

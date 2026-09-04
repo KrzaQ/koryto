@@ -31,6 +31,7 @@ import type {
   WeightPatchInput,
   WeightStats,
   WeeklyStats,
+  Summary,
 } from './types'
 
 export class ApiError extends Error {
@@ -105,6 +106,7 @@ export const api = {
     expenditure: (r: Range) =>
       request<ExpenditureStats>('GET', '/api/stats/expenditure', undefined, r),
     weekly: (r: Range) => request<WeeklyStats>('GET', '/api/stats/weekly', undefined, r),
+    summary: (r: Range) => request<Summary>('GET', '/api/stats/summary', undefined, r),
   },
 
   profile: {
