@@ -445,14 +445,16 @@ describe('views', () => {
     // Both days come from the same mock, so the tiles carry the same numbers;
     // what matters is that each day is fetched and the weight is the last one.
     expect(w.find('[data-testid="tile-today"]').text()).toContain('1618')
-    expect(w.find('[data-testid="tile-today"]').text()).toContain('left')
+    expect(w.find('[data-testid="tile-today"]').text()).toContain('kcal left')
     expect(w.find('[data-testid="tile-today"]').text()).toContain('2818 burnt')
     expect(w.find('[data-testid="tile-yesterday"]').exists()).toBe(true)
     expect(w.find('[data-testid="tile-weight"]').text()).toContain('82.4')
     expect(w.find('[data-testid="log-today"]').text()).toContain('Lentil curry')
     // The ledger adds up to the tile: −1200 food, +600 sport, +2218 base.
     expect(w.find('[data-testid="log-today"]').text()).toContain('× 1.5')
-    expect(w.find('[data-testid="log-today"] [data-testid="ledger-total"]').text()).toBe('+1618')
+    expect(w.find('[data-testid="log-today"] [data-testid="ledger-total"]').text()).toBe(
+      '+1618 kcal',
+    )
     expect(w.find('[data-testid="log-yesterday"]').exists()).toBe(true)
     expect(calls.some((c) => c.startsWith('GET /api/day?user=1&date=2026-09-04'))).toBe(true)
     expect(calls.some((c) => c.startsWith('GET /api/day?user=1&date=2026-09-03'))).toBe(true)

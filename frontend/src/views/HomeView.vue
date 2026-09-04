@@ -108,7 +108,7 @@ function ledger(d: DayDto): { food: Line; tail: Line[] } {
               :class="rooms[i]!.kcal < 0 ? 'text-danger' : 'text-ok'"
               >{{ Math.abs(rooms[i]!.kcal) }}</span
             >
-            <span class="text-sm text-muted">{{ rooms[i]!.kcal < 0 ? 'over' : 'left' }}</span>
+            <span class="text-sm text-muted">kcal {{ rooms[i]!.kcal < 0 ? 'over' : 'left' }}</span>
           </template>
           <span v-else class="text-3xl font-semibold tabular-nums">—</span>
           <RouterLink :to="`/d/${d.day}`" class="link ml-auto text-xs">open</RouterLink>
@@ -178,7 +178,7 @@ function ledger(d: DayDto): { food: Line; tail: Line[] } {
               <td></td>
               <td class="py-1 text-muted">{{ ledger(d).food.label }}</td>
               <td class="py-1 text-right font-medium tabular-nums text-danger">
-                {{ signed(ledger(d).food.kcal) }}
+                {{ signed(ledger(d).food.kcal) }} <span class="text-xs text-muted">kcal</span>
               </td>
             </tr>
             <tr v-for="a in d.activities" :key="a.id" class="border-t border-edge">
@@ -211,7 +211,7 @@ function ledger(d: DayDto): { food: Line; tail: Line[] } {
                 ]"
                 :data-testid="n === ledger(d).tail.length - 1 ? 'ledger-total' : undefined"
               >
-                {{ signed(l.kcal) }}
+                {{ signed(l.kcal) }} <span class="text-xs text-muted">kcal</span>
               </td>
             </tr>
           </tbody>
