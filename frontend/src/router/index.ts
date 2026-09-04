@@ -33,13 +33,6 @@ const router = createRouter({
       path: '/tokens',
       name: 'tokens',
       component: () => import('@/views/TokensView.vue'),
-      meta: { withoutHousehold: true },
-    },
-    {
-      path: '/welcome',
-      name: 'welcome',
-      component: () => import('@/views/NoHouseholdView.vue'),
-      meta: { withoutHousehold: true },
     },
     {
       path: '/:pathMatch(.*)*',
@@ -54,7 +47,6 @@ router.beforeEach(async (to) => {
   const session = useSession()
   if (!session.checked) await session.load()
   if (!session.me) return { name: 'login', query: { next: to.fullPath } }
-  if (!session.inHousehold && !to.meta.withoutHousehold) return { name: 'welcome' }
   return true
 })
 

@@ -25,7 +25,6 @@ export const useSession = defineStore('session', () => {
   }
 
   const members = computed(() => me.value?.household?.members ?? [])
-  const inHousehold = computed(() => !!me.value?.household)
 
-  return { me, checked, members, inHousehold, load, logout }
+  return { me, checked, members, load, logout }
 })

@@ -8,7 +8,6 @@ import { usePerson } from '@/stores/person'
 import DayView from './DayView.vue'
 import FoodsView from './FoodsView.vue'
 import LoginView from './LoginView.vue'
-import NoHouseholdView from './NoHouseholdView.vue'
 import ProfileView from './ProfileView.vue'
 import TokensView from './TokensView.vue'
 import TrendsView from './TrendsView.vue'
@@ -442,13 +441,6 @@ describe('views', () => {
     expect(w.find('[data-testid="trends-table"]').text()).toContain('−618')
     await w.find('[data-testid="balance-mode"] button:last-child').trigger('click')
     expect(calls.some((c) => c.startsWith('GET /api/stats/weekly?user=1'))).toBe(true)
-    expect(errors).toEqual([])
-  })
-
-  it('NoHouseholdView names the command', async () => {
-    const w = await render(NoHouseholdView)
-    expect(w.text()).toContain('household add-member')
-    expect(w.text()).toContain('alice@example.com')
     expect(errors).toEqual([])
   })
 
