@@ -76,6 +76,12 @@ On the Tokens page (session only; tokens cannot make tokens):
   the acting person, who must have logged in here before.
 - `claude-code`: scopes `read,write,edit`, acting as you.
 
+The gateway token acts only for people who have logged into koryto through
+the browser in the last 30 days, so removing someone in authentik stops
+their Open WebUI access within that time on its own. To cut someone off at
+once, `koryto household remove-member <email>`: every read and write is
+refused from then on, whatever they still hold.
+
 Register `https://koryto.int.krzaq.cc/mcp` in Open WebUI with the bearer
 token and the `X-Koryto-User` header set from the acting user, the same way
 the support server's `X-Support-User` is wired. In Claude Code:

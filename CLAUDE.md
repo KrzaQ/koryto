@@ -46,6 +46,8 @@ this one copies its bones from.
 - Token scopes: `read`, `write` (log, add foods, set location), `edit`
   (change, void, targets, foods, profile), `delegate` (acts as the user named
   in `X-Koryto-User`). A delegate token has no user; a personal token has one.
+  A delegate token acts only for someone who logged in through the browser
+  in the last 30 days; `household remove-member` cuts access at once.
 - No CORS headers; the frontend is same-origin. `/api/*` never redirects on 401.
 - Tests must not need the network or an existing database. DB-backed tests use
   `scripts/test-db.sh`, which refuses a `TEST_DATABASE_URL` whose database

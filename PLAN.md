@@ -362,8 +362,10 @@ Delegate(ApiToken, User)`; after resolution every principal has a user, and
 handlers never see the difference except for `require_session` on token
 management. Bearer resolution lives in `http::auth::bearer` and is shared by
 the API extractor and the MCP middleware. A delegate token without
-`X-Koryto-User`, or naming an email that has never logged in, is 403 with a
-message that says so. A user with `household_id IS NULL` is 403 on everything
+`X-Koryto-User`, or naming an email that has never logged in, or one whose
+last browser login is older than a session (30 days), is 403 with a message
+that says so; the last rule lets an authentik-side revocation reach the
+gateway path without a CLI step. A user with `household_id IS NULL` is 403 on everything
 but `/api/me` and logout; the frontend shows a "not in a household yet" page.
 
 ## MCP

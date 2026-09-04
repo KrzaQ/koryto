@@ -24,6 +24,10 @@ use crate::domain::token;
 pub const SESSION_COOKIE: &str = "koryto_session";
 const LOGIN_COOKIE: &str = "koryto_login";
 const SESSION_DAYS: i64 = 30;
+/// A delegate token acts only for people who have logged in through the
+/// browser this recently, so a revocation in authentik reaches the gateway
+/// path on its own, with the same lag a session cookie has.
+pub const DELEGATE_LOGIN_DAYS: i64 = SESSION_DAYS;
 pub const DEV_SUBJECT: &str = "dev";
 pub const DEV_HOUSEHOLD: &str = "dev";
 
@@ -210,6 +214,15 @@ pub async fn bearer(state: &AppState, headers: &HeaderMap) -> ApiResult<Option<P
         .find_user_by_email(email)
         .await?
         .ok_or_else(|| ApiError::forbidden(format!("{email} has never logged in here")))?;
+    let fresh = user
+        .last_login_at
+        .is_some_and(|at| Utc::now() - at <= chrono::Duration::days(DELEGATE_LOGIN_DAYS));
+    if !fresh {
+        return Err(ApiError::forbidden(format!(
+            "{email} has not logged in through the browser for {DELEGATE_LOGIN_DAYS} days; \
+             log in there once to keep using the gateway"
+        )));
+    }
     Ok(Some(Principal::Delegate { token: t, user }))
 }
 

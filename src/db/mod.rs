@@ -81,6 +81,12 @@ impl Db {
         Self { pool }
     }
 
+    /// For tests that need to age or corrupt rows behind the queries.
+    #[cfg(test)]
+    pub fn pool(&self) -> &PgPool {
+        &self.pool
+    }
+
     pub async fn migrate(&self) -> Result<()> {
         MIGRATOR
             .run(&self.pool)

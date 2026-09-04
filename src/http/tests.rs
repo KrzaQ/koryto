@@ -301,6 +301,36 @@ async fn delegate_tokens_act_as_the_named_user() {
     )
     .await;
     assert_eq!(s, StatusCode::FORBIDDEN);
+
+    // Someone whose last browser login is older than a session: the gateway
+    // stops working for them until they log in again, so a revocation in
+    // authentik reaches this path by itself.
+    sqlx::query("UPDATE users SET last_login_at = now() - interval '31 days' WHERE id = $1")
+        .bind(h.bob.id)
+        .execute(t.db.pool())
+        .await
+        .unwrap();
+    let (s, b, _) = call(
+        &app,
+        delegated("GET", "/api/me", &d, "bob@example.com", None),
+    )
+    .await;
+    assert_eq!(s, StatusCode::FORBIDDEN, "{b}");
+    assert!(b["error"]["message"].as_str().unwrap().contains("log in"));
+    // A personal token is unaffected: it is the person's own credential.
+    let bobs = token_for(&t, "bob", &["read"], Some(h.bob.id)).await;
+    let (s, _, _) = call(&app, req("GET", "/api/me", Some(&bobs), None)).await;
+    assert_eq!(s, StatusCode::OK);
+    // Logging in again restores the gateway.
+    t.db.upsert_user("bob", None, None, "Europe/Warsaw")
+        .await
+        .unwrap();
+    let (s, _, _) = call(
+        &app,
+        delegated("GET", "/api/me", &d, "bob@example.com", None),
+    )
+    .await;
+    assert_eq!(s, StatusCode::OK);
     t.finish().await;
 }
 
