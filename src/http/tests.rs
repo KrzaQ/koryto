@@ -679,10 +679,14 @@ async fn meals_for_two_people_from_a_food_and_the_day_view() {
     assert_eq!(b["totals"]["meals"], 2);
     assert_eq!(b["totals"]["meals_without_protein"], 1);
     assert_eq!(b["totals"]["sport_minutes"], 90);
+    assert_eq!(b["totals"]["sport_kcal"], 600);
     assert_eq!(b["logged"], true);
     assert!(b["target"].is_null());
     assert!(b["balance"].is_null());
+    // No profile, no base: the sport alone is not an expenditure.
     assert_eq!(b["expenditure"]["basis"], "none");
+    assert_eq!(b["expenditure"]["sport_kcal"], 600);
+    assert!(b["expenditure"]["kcal"].is_null());
     assert!(b["balance_vs_expenditure"].is_null());
     assert_eq!(b["weights"][0]["weight_kg"], "82.4");
     // Bob's day only has the curry.
@@ -1161,6 +1165,19 @@ async fn stats_endpoints_follow_the_days() {
             assert_eq!(s, StatusCode::CREATED);
         }
     }
+    // A swim with a number on the last day: it raises that day's expenditure
+    // by 500 and, being one session in the window, lowers the base a little.
+    let (s, _, _) = call(
+        &app,
+        req(
+            "POST",
+            "/api/activities",
+            Some(e),
+            Some(json!({"kind": "swim", "duration": "1h", "kcal": 500, "started_at": "2026-08-30 18:00"})),
+        ),
+    )
+    .await;
+    assert_eq!(s, StatusCode::CREATED);
     let (s, b, _) = call(
         &app,
         req(
@@ -1194,8 +1211,48 @@ async fn stats_endpoints_follow_the_days() {
     assert_eq!(days[0]["basis"], "seed");
     assert_eq!(days[27]["basis"], "adaptive");
     assert_eq!(b["latest"]["basis"], "adaptive");
-    // Lost 2.1 kg of trend... only the trend moves, slowly: expenditure is a bit above 2000.
-    assert!(b["latest"]["kcal"].as_i64().unwrap() > 2000, "{b}");
+    // Lost 2.1 kg of raw weight, but the trend moves slowly: about 390 g over
+    // 21 days, 140-odd kcal a day, minus the swim's share of the window
+    // (500 / 28 ≈ 18). The base lands a little above 2100.
+    let base = b["latest"]["base_kcal"].as_i64().unwrap();
+    assert!(base > 2100 && base < 2160, "{b}");
+    assert_eq!(b["latest"]["sport_kcal"], 500);
+    assert_eq!(b["latest"]["kcal"], base + 500);
+    assert_eq!(days[27]["kcal"], base + 500);
+    assert_eq!(days[26]["sport_kcal"], 0);
+    assert_eq!(days[26]["kcal"], days[26]["base_kcal"]);
+
+    let (s, b, _) = call(
+        &app,
+        req(
+            "GET",
+            "/api/stats/summary?from=2026-08-24&to=2026-08-30",
+            Some(&h.reader),
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(s, StatusCode::OK, "{b}");
+    assert_eq!(b["logged_days"], 7);
+    assert_eq!(b["mean_kcal"], 2000);
+    assert_eq!(b["mean_balance"], 100);
+    assert_eq!(b["sport_kcal"], 500);
+    // Six days at 2000 − base, one at 2000 − base − 500: the swim day earned its kcal.
+    let vs = b["mean_balance_vs_expenditure"].as_i64().unwrap();
+    assert!(vs < 2000 - base && vs > 2000 - base - 100, "{b}");
+    assert_eq!(b["expenditure"]["kcal"], base + 500);
+    assert_eq!(b["rows"].as_array().unwrap().len(), 7);
+    let (s, _, _) = call(
+        &app,
+        req(
+            "GET",
+            "/api/stats/summary?from=2026-08-30&to=2026-08-24",
+            Some(&h.reader),
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
 
     let (s, b, _) = call(
         &app,
@@ -1216,6 +1273,8 @@ async fn stats_endpoints_follow_the_days() {
     assert_eq!(weeks[0]["logged_days"], 7);
     assert_eq!(weeks[0]["mean_kcal"], 2000);
     assert_eq!(weeks[0]["mean_balance_vs_target"], 100);
+    assert_eq!(weeks[0]["sport_kcal"], 0);
+    assert_eq!(weeks[3]["sport_kcal"], 500);
     assert!(weeks[3]["mean_expenditure"].as_i64().unwrap() > 2000);
     let (s, _, _) = call(
         &app,

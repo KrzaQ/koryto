@@ -482,7 +482,7 @@ async fn totals_skip_voided_and_take_the_first_weight() {
         Err(DbError::Conflict(_))
     ));
 
-    // Activities: minutes per day; kcal never enters the meal totals.
+    // Activities: minutes and kcal per day; kcal never enters the meal totals.
     let r = apptime::resolve(db, a, Some(utc("2026-09-04T16:00:00Z")), None, None)
         .await
         .unwrap();
@@ -512,7 +512,8 @@ async fn totals_skip_voided_and_take_the_first_weight() {
         vec![ActivityDayTotals {
             day: d("2026-09-04"),
             minutes: 45,
-            activities: 1
+            activities: 1,
+            kcal: Some(400),
         }]
     );
     assert_eq!(db.first_day(a.id).await.unwrap(), Some(d("2026-09-04")));

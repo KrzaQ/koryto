@@ -49,8 +49,10 @@ with food and portions and no confirmation is needed. Otherwise estimate kcal an
 description, show the person the description and both numbers, and call log_meal with confirmed=true \
 only after they agree; offer add_food when something sounds like it will recur. One dinner for several \
 people is one call with for_users. Weights and sport are the person's own numbers: log them without \
-asking. Sport never subtracts from intake; the expenditure figure in get_summary already accounts for \
-it. void_entry is the undo. Travel: set_location when someone says where they are; days recompute. \
+asking. Sport kcal is added to that day's expenditure, so a 600 kcal swim means 600 kcal more to eat \
+that day; log the number the person gives, or an estimate they agree to, and leave it out otherwise. \
+The budget question (\"can I have a beer?\") is balance_vs_expenditure on get_day: below zero is room \
+left. void_entry is the undo. Travel: set_location when someone says where they are; days recompute. \
 log_* and add_food and set_location need the write scope; update_*, void_entry, set_target and the \
 food edits need edit.";
 
@@ -213,7 +215,7 @@ pub struct LogActivityParam {
     pub kind: String,
     /// "45", "45m", "1h", "1h30", "1:30"
     pub duration: String,
-    /// Only if the person gives it; it never enters the balance
+    /// The number the person gives or agrees to; it is added to that day's expenditure
     pub kcal: Option<i32>,
     pub note: Option<String>,
     /// RFC 3339 or YYYY-MM-DD HH:MM; default now
@@ -453,12 +455,14 @@ pub struct DayOut {
     pub protein_g: Option<i32>,
     pub meals_without_protein: i32,
     pub sport_minutes: i32,
+    /// Sum of the day's sport kcal; null when no entry carries a number
+    pub sport_kcal: Option<i32>,
     pub target_kcal: Option<i32>,
     /// kcal minus target, on a logged day with a target
     pub balance: Option<i32>,
-    /// Estimated daily expenditure as of this day, and its basis
+    /// Estimated expenditure for this day (base plus the day's sport), and its basis
     pub expenditure: Estimate,
-    /// kcal minus the estimate, on a logged day with an estimate
+    /// kcal minus the estimate, on a logged day with an estimate; below zero is room left
     pub balance_vs_expenditure: Option<i32>,
     pub meals: Vec<MealOut>,
     pub weights: Vec<WeightOut>,
@@ -489,6 +493,7 @@ pub struct DayRowOut {
     pub kcal: Option<i32>,
     pub protein_g: Option<i32>,
     pub sport_minutes: i32,
+    pub sport_kcal: Option<i32>,
     pub weight_kg: Option<String>,
     pub trend_kg: Option<String>,
     pub target_kcal: Option<i32>,
@@ -505,7 +510,12 @@ pub struct SummaryOut {
     pub mean_kcal: Option<i32>,
     pub mean_protein_g: Option<i32>,
     pub mean_balance: Option<i32>,
+    /// Mean expenditure (base plus sport) over logged days with an estimate
+    pub mean_expenditure: Option<i32>,
+    /// Mean intake minus expenditure over logged days with an estimate; below zero is a deficit
+    pub mean_balance_vs_expenditure: Option<i32>,
     pub sport_minutes: i32,
+    pub sport_kcal: i32,
     pub weight_first_kg: Option<String>,
     pub weight_last_kg: Option<String>,
     pub trend_first_kg: Option<String>,
@@ -613,6 +623,7 @@ impl KorytoMcp {
             protein_g: v.totals.protein_g,
             meals_without_protein: v.totals.meals_without_protein,
             sport_minutes: v.totals.sport_minutes,
+            sport_kcal: v.totals.sport_kcal,
             target_kcal: v.target.as_ref().map(|t| t.kcal),
             balance: v.balance,
             expenditure: v.expenditure,
@@ -713,7 +724,7 @@ impl KorytoMcp {
     }
 
     #[tool(
-        description = "A range of days for one person: per-day intake, protein, sport, weight and trend, plus averages over logged days, the trend change and the estimated daily expenditure with its basis (adaptive from the data, or the Mifflin-St Jeor seed until there is enough). Unlogged days are gaps, not zeros."
+        description = "A range of days for one person: per-day intake, protein, sport, weight and trend, plus averages over logged days, the trend change, the mean balance against expenditure and the estimated daily expenditure with its basis (adaptive from the data, or the Mifflin-St Jeor seed until there is enough). Unlogged days are gaps, not zeros."
     )]
     async fn get_summary(
         &self,
@@ -736,7 +747,10 @@ impl KorytoMcp {
             mean_kcal: s.mean_kcal,
             mean_protein_g: s.mean_protein_g,
             mean_balance: s.mean_balance,
+            mean_expenditure: s.mean_expenditure,
+            mean_balance_vs_expenditure: s.mean_balance_vs_expenditure,
             sport_minutes: s.sport_minutes,
+            sport_kcal: s.sport_kcal,
             weight_first_kg: s.weight.first_g.map(format_kg),
             weight_last_kg: s.weight.last_g.map(format_kg),
             trend_first_kg: s.weight.trend_first_g.map(format_kg),
@@ -752,6 +766,7 @@ impl KorytoMcp {
                     kcal: r.kcal,
                     protein_g: r.protein_g,
                     sport_minutes: r.sport_minutes,
+                    sport_kcal: r.sport_kcal,
                     weight_kg: r.weight_g.map(format_kg),
                     trend_kg: r.trend_g.map(format_kg),
                     target_kcal: r.target_kcal,
@@ -930,7 +945,7 @@ impl KorytoMcp {
     }
 
     #[tool(
-        description = "Record sport: a kind and a duration, now unless started_at is given. kcal only if the person gives it; it is informational and never subtracts from intake. Needs the write scope."
+        description = "Record sport: a kind and a duration, now unless started_at is given. kcal, when the person gives it or agrees to an estimate, is added to that day's expenditure and so to what they may eat. Needs the write scope."
     )]
     async fn log_activity(
         &self,

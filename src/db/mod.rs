@@ -1034,7 +1034,8 @@ impl Db {
         to: NaiveDate,
     ) -> DbResult<Vec<ActivityDayTotals>> {
         Ok(sqlx::query_as(
-            "SELECT day, sum(minutes)::int AS minutes, count(*)::int AS activities \
+            "SELECT day, sum(minutes)::int AS minutes, count(*)::int AS activities, \
+             sum(kcal)::int AS kcal \
              FROM activities WHERE user_id = $1 AND day BETWEEN $2 AND $3 AND voided_at IS NULL \
              GROUP BY day ORDER BY day",
         )

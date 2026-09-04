@@ -7,7 +7,7 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
-use crate::app::stats::{self, Week};
+use crate::app::stats::{self, Summary, Week};
 use crate::app::{day as appday, scope};
 use crate::domain::expenditure::{Basis, Estimate};
 use crate::http::AppState;
@@ -73,7 +73,10 @@ pub async fn weight(
 #[derive(Serialize, ToSchema)]
 pub struct ExpenditurePoint {
     pub day: NaiveDate,
+    /// Base plus the day's sport
     pub kcal: Option<i32>,
+    pub base_kcal: Option<i32>,
+    pub sport_kcal: i32,
     pub basis: Basis,
     pub logged_days: usize,
 }
@@ -102,6 +105,8 @@ pub async fn expenditure(
         .map(|(_, e)| e.clone())
         .unwrap_or_else(|| Estimate {
             kcal: None,
+            base_kcal: None,
+            sport_kcal: 0,
             basis: Basis::None,
             logged_days: 0,
             weight_span_days: 0,
@@ -116,6 +121,8 @@ pub async fn expenditure(
             .map(|(day, e)| ExpenditurePoint {
                 day,
                 kcal: e.kcal,
+                base_kcal: e.base_kcal,
+                sport_kcal: e.sport_kcal,
                 basis: e.basis,
                 logged_days: e.logged_days,
             })
@@ -147,4 +154,15 @@ pub async fn weekly(
         to: q.to,
         weeks,
     }))
+}
+
+#[utoipa::path(get, path = "/api/stats/summary", tag = "stats", params(StatsQuery),
+    responses((status = 200, body = Summary), (status = 400, body = ErrorBody)))]
+pub async fn summary(
+    State(st): State<AppState>,
+    p: Principal,
+    Query(q): Query<StatsQuery>,
+) -> ApiResult<Json<Summary>> {
+    let user = scope::member(&st.db, p.user(), q.user).await?;
+    Ok(Json(stats::summary(&st.db, &user, q.from, q.to).await?))
 }

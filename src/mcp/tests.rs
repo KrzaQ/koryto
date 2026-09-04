@@ -357,7 +357,8 @@ async fn logs_for_two_people_confirms_estimates_and_voids() {
     assert!(is_error(&unknown), "{unknown}");
     assert!(error_text(&unknown).contains("search_foods"));
 
-    // Weight and sport go straight in; sport does not touch the balance.
+    // Weight and sport go straight in; without a profile the sport kcal has
+    // no base to sit on, so the balance stays against the target only.
     let w = structured(
         &c.call(
             "log_weight",
@@ -382,6 +383,10 @@ async fn logs_for_two_people_confirms_estimates_and_voids() {
     );
     assert_eq!(bobs["kcal"], 780);
     assert_eq!(bobs["sport_minutes"], 90);
+    assert_eq!(bobs["sport_kcal"], 600);
+    assert_eq!(bobs["expenditure"]["sport_kcal"], 600);
+    assert!(bobs["expenditure"]["kcal"].is_null());
+    assert!(bobs["balance_vs_expenditure"].is_null());
 
     // A target from that day gives a balance; the summary sees everything.
     let tgt = structured(
@@ -408,6 +413,8 @@ async fn logs_for_two_people_confirms_estimates_and_voids() {
     assert_eq!(s["mean_balance"], -600);
     assert_eq!(s["weight_last_kg"], "82.4");
     assert_eq!(s["expenditure"]["basis"], "none");
+    assert!(s["mean_balance_vs_expenditure"].is_null());
+    assert_eq!(s["sport_kcal"], 0);
     assert_eq!(s["rows"].as_array().unwrap().len(), 7);
     assert_eq!(s["rows"][3]["kcal"], 1200);
     assert!(s["rows"][0]["kcal"].is_null());

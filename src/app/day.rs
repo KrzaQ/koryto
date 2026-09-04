@@ -22,6 +22,8 @@ pub struct Totals {
     pub meals: i32,
     pub meals_without_protein: i32,
     pub sport_minutes: i32,
+    /// Sum over the sport entries that carry kcal; null when none do
+    pub sport_kcal: Option<i32>,
 }
 
 #[derive(Debug, Clone)]
@@ -36,7 +38,8 @@ pub struct DayView {
     /// kcal minus the target, on a logged day with a target
     pub balance: Option<i32>,
     pub logged: bool,
-    /// The expenditure estimate as of this day, and where it comes from
+    /// The expenditure estimate as of this day (base plus the day's sport),
+    /// and where it comes from
     pub expenditure: Estimate,
     /// kcal minus the estimate, on a logged day with an estimate
     pub balance_vs_expenditure: Option<i32>,
@@ -55,16 +58,18 @@ pub async fn day_view(
         .await?;
     let live: Vec<&Meal> = meals.iter().filter(|m| m.voided_at.is_none()).collect();
     let with_protein: Vec<i32> = live.iter().filter_map(|m| m.protein_g).collect();
+    let sport: Vec<&Activity> = activities
+        .iter()
+        .filter(|a| a.voided_at.is_none())
+        .collect();
+    let sport_with_kcal: Vec<i32> = sport.iter().filter_map(|a| a.kcal).collect();
     let totals = Totals {
         kcal: live.iter().map(|m| m.kcal).sum(),
         protein_g: (!with_protein.is_empty()).then(|| with_protein.iter().sum()),
         meals: live.len() as i32,
         meals_without_protein: (live.len() - with_protein.len()) as i32,
-        sport_minutes: activities
-            .iter()
-            .filter(|a| a.voided_at.is_none())
-            .map(|a| a.minutes)
-            .sum(),
+        sport_minutes: sport.iter().map(|a| a.minutes).sum(),
+        sport_kcal: (!sport_with_kcal.is_empty()).then(|| sport_with_kcal.iter().sum()),
     };
     let target = db.target_for(user.id, day).await?;
     let logged = !live.is_empty();
@@ -103,6 +108,8 @@ pub struct DayRow {
     pub meals: i32,
     pub meals_without_protein: i32,
     pub sport_minutes: i32,
+    /// Sum over the sport entries that carry kcal; null when none do
+    pub sport_kcal: Option<i32>,
     /// The day's first reading, in grams
     pub weight_g: Option<i32>,
     /// The trend on a day with a reading
@@ -131,11 +138,11 @@ pub async fn days(db: &Db, user: &User, from: NaiveDate, to: NaiveDate) -> AppRe
         .into_iter()
         .map(|t| (t.day, t))
         .collect();
-    let sport: HashMap<NaiveDate, i32> = db
+    let sport: HashMap<NaiveDate, (i32, Option<i32>)> = db
         .activity_day_totals(user.id, from, to)
         .await?
         .into_iter()
-        .map(|t| (t.day, t.minutes))
+        .map(|t| (t.day, (t.minutes, t.kcal)))
         .collect();
     let trend_by_day = trend_up_to(db, user, to).await?;
     let targets = db.list_targets(user.id).await?;
@@ -158,7 +165,8 @@ pub async fn days(db: &Db, user: &User, from: NaiveDate, to: NaiveDate) -> AppRe
             protein_g: m.and_then(|m| m.protein_g),
             meals: m.map(|m| m.meals).unwrap_or(0),
             meals_without_protein: m.map(|m| m.meals_without_protein).unwrap_or(0),
-            sport_minutes: sport.get(&d).copied().unwrap_or(0),
+            sport_minutes: sport.get(&d).map(|s| s.0).unwrap_or(0),
+            sport_kcal: sport.get(&d).and_then(|s| s.1),
             weight_g,
             trend_g,
             target_kcal,

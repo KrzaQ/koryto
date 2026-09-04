@@ -352,6 +352,8 @@ pub struct ActivityDayTotals {
     pub day: NaiveDate,
     pub minutes: i32,
     pub activities: i32,
+    /// Sum over the entries that carry kcal; None when none do
+    pub kcal: Option<i32>,
 }
 
 /// The day's weight: the earliest non-voided reading.

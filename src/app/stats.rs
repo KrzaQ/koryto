@@ -1,5 +1,6 @@
 //! Summaries over a range: averages, the weight trend and the expenditure
-//! estimate. What the MCP summary and the charts are made of.
+//! estimate. What the MCP summary, the day page's week line and the charts
+//! are made of.
 
 use chrono::{Duration, NaiveDate};
 use serde::Serialize;
@@ -25,11 +26,13 @@ fn window_rows(rows: &[DayRow]) -> Vec<expenditure::DayRow> {
             day: r.day,
             kcal: r.kcal,
             trend_g: r.trend_g,
+            sport_kcal: r.sport_kcal,
         })
         .collect()
 }
 
-/// The estimate as of `end`, over the window ending there.
+/// The estimate as of `end`, over the window ending there, with `end`'s
+/// sport on top of the base.
 pub async fn expenditure_on(db: &Db, user: &User, end: NaiveDate) -> AppResult<Estimate> {
     let start = end - Duration::days(WINDOW_DAYS - 1);
     let rows = day::days(db, user, start, end).await?;
@@ -99,8 +102,14 @@ pub struct Summary {
     pub mean_protein_g: Option<i32>,
     pub total_kcal: i32,
     pub sport_minutes: i32,
+    /// Sum of the sport kcal logged in the range
+    pub sport_kcal: i32,
     /// Mean balance against the target over logged days with a target
     pub mean_balance: Option<i32>,
+    /// Mean expenditure (base plus sport) over logged days with an estimate
+    pub mean_expenditure: Option<i32>,
+    /// Mean intake minus expenditure over logged days with an estimate
+    pub mean_balance_vs_expenditure: Option<i32>,
     pub weight: WeightSummary,
     /// As of the last day of the range
     pub expenditure: Estimate,
@@ -127,7 +136,20 @@ pub async fn summary(db: &Db, user: &User, from: NaiveDate, to: NaiveDate) -> Ap
         },
         readings: weights.len(),
     };
-    let expenditure = expenditure_on(db, user, to).await?;
+    let series = expenditure_series(db, user, from, to).await?;
+    let expenditure = series
+        .last()
+        .map(|(_, e)| e.clone())
+        .expect("a range has at least one day");
+    // Per logged day, so a week of eating a lot with one big session still
+    // shows the deficit or surplus it actually was.
+    let vs_expenditure: Vec<(i64, i64)> = logged
+        .iter()
+        .filter_map(|r| {
+            let (_, e) = series.iter().find(|(d, _)| *d == r.day)?;
+            Some((i64::from(r.kcal?), i64::from(e.kcal?)))
+        })
+        .collect();
     Ok(Summary {
         from,
         to,
@@ -147,12 +169,15 @@ pub async fn summary(db: &Db, user: &User, from: NaiveDate, to: NaiveDate) -> Ap
         ),
         total_kcal: logged.iter().filter_map(|r| r.kcal).sum(),
         sport_minutes: rows.iter().map(|r| r.sport_minutes).sum(),
+        sport_kcal: rows.iter().filter_map(|r| r.sport_kcal).sum(),
         mean_balance: mean(
             logged
                 .iter()
                 .filter_map(|r| r.balance.map(i64::from))
                 .collect(),
         ),
+        mean_expenditure: mean(vs_expenditure.iter().map(|(_, e)| *e).collect()),
+        mean_balance_vs_expenditure: mean(vs_expenditure.iter().map(|(k, e)| k - e).collect()),
         weight,
         expenditure,
         rows,
@@ -172,11 +197,13 @@ pub struct Week {
     pub mean_kcal: Option<i32>,
     pub total_kcal: i32,
     pub sport_minutes: i32,
+    /// Sum of the sport kcal logged that week
+    pub sport_kcal: i32,
     /// Mean intake minus target over logged days with a target
     pub mean_balance_vs_target: Option<i32>,
-    /// Mean expenditure estimate over the week's days that have one
+    /// Mean expenditure estimate (base plus sport) over the week's days that have one
     pub mean_expenditure: Option<i32>,
-    /// Mean intake minus mean expenditure, when both exist
+    /// Mean intake minus expenditure over logged days with an estimate
     pub mean_balance_vs_expenditure: Option<i32>,
 }
 
@@ -203,6 +230,7 @@ pub async fn weekly(db: &Db, user: &User, from: NaiveDate, to: NaiveDate) -> App
                 mean_kcal: None,
                 total_kcal: 0,
                 sport_minutes: 0,
+                sport_kcal: 0,
                 mean_balance_vs_target: None,
                 mean_expenditure: None,
                 mean_balance_vs_expenditure: None,
@@ -211,6 +239,7 @@ pub async fn weekly(db: &Db, user: &User, from: NaiveDate, to: NaiveDate) -> App
         let w = out.last_mut().expect("pushed");
         w.days += 1;
         w.sport_minutes += row.sport_minutes;
+        w.sport_kcal += row.sport_kcal.unwrap_or(0);
         if row.logged {
             w.logged_days += 1;
             w.total_kcal += row.kcal.unwrap_or(0);
@@ -234,10 +263,20 @@ pub async fn weekly(db: &Db, user: &User, from: NaiveDate, to: NaiveDate) -> App
             .filter(|(d, _)| in_week(*d))
             .filter_map(|(_, e)| e.kcal.map(i64::from))
             .collect();
+        // Balance per logged day, so a session on an unlogged day does not
+        // pull the mean.
+        let vs_exp: Vec<i64> = rows
+            .iter()
+            .filter(|r| in_week(r.day))
+            .filter_map(|r| {
+                let (_, e) = estimates.iter().find(|(d, _)| *d == r.day)?;
+                Some(i64::from(r.kcal?) - i64::from(e.kcal?))
+            })
+            .collect();
         w.mean_kcal = mean(&kcal);
         w.mean_balance_vs_target = mean(&balance);
         w.mean_expenditure = mean(&exp);
-        w.mean_balance_vs_expenditure = w.mean_kcal.zip(w.mean_expenditure).map(|(k, e)| k - e);
+        w.mean_balance_vs_expenditure = mean(&vs_exp);
     }
     Ok(out)
 }

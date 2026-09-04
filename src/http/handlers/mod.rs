@@ -42,6 +42,7 @@ pub fn read_routes() -> OpenApiRouter<AppState> {
         .routes(routes!(stats::weight))
         .routes(routes!(stats::expenditure))
         .routes(routes!(stats::weekly))
+        .routes(routes!(stats::summary))
 }
 
 pub fn write_routes() -> OpenApiRouter<AppState> {
