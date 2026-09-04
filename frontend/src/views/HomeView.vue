@@ -9,7 +9,7 @@ import BudgetChart from '@/components/BudgetChart.vue'
 import { dayLabel, shiftDay } from '@/lib/day'
 import { roomOf } from '@/lib/budget'
 import { formatDateTime } from '@/lib/time'
-import { formatKg, formatMinutes } from '@/lib/units'
+import { formatKg, formatMinutes, signed } from '@/lib/units'
 import { usePerson } from '@/stores/person'
 import { useSession } from '@/stores/session'
 import { useTimezone } from '@/stores/timezone'
@@ -57,6 +57,32 @@ const weighedAgo = computed(() => {
 
 function time(iso: string) {
   return formatDateTime(iso, tz.zone).slice(11)
+}
+
+/** "× 1.5" on a meal logged as part of a portion, nothing on a whole one. */
+function portions(p: string | null | undefined) {
+  return p && Number(p) !== 1 ? `× ${p}` : ''
+}
+
+type Line = { label: string; kcal: number; tone: 'in' | 'out' | 'total' }
+
+/** The day as a ledger: food spends, sport and the base earn, the rest is
+ *  what is left. Without a burn estimate the target stands in for the base
+ *  and the sport earns nothing, so the column still adds up. */
+function ledger(d: DayDto): { food: Line; tail: Line[] } {
+  const room = roomOf(d)
+  const food: Line = { label: 'Food', kcal: -d.totals.kcal, tone: 'in' }
+  const tail: Line[] = []
+  if (room?.kind === 'burn') {
+    if (d.expenditure.sport_kcal)
+      tail.push({ label: 'Sport', kcal: d.expenditure.sport_kcal, tone: 'out' })
+    if (d.expenditure.base_kcal != null)
+      tail.push({ label: 'Base burn', kcal: d.expenditure.base_kcal, tone: 'out' })
+  } else if (room?.kind === 'target') {
+    tail.push({ label: 'Target', kcal: room.against, tone: 'out' })
+  }
+  if (room) tail.push({ label: room.kcal < 0 ? 'Over' : 'Left', kcal: room.kcal, tone: 'total' })
+  return { food, tail }
 }
 </script>
 
@@ -130,28 +156,66 @@ function time(iso: string) {
             {{ i === 0 ? 'Today' : 'Yesterday' }}
           </h2>
           <span class="text-xs text-muted">{{ dayLabel(d.day) }}</span>
-          <span class="flex-1"></span>
-          <span class="text-sm font-medium tabular-nums">{{ d.totals.kcal }}</span>
         </div>
-        <table v-if="d.meals.length" class="mt-2 w-full text-sm">
+        <table class="mt-2 w-full text-sm">
           <tbody>
             <tr v-for="m in d.meals" :key="m.id" class="border-t border-edge">
               <td class="w-12 py-1 pr-3 font-mono text-xs text-muted">{{ time(m.eaten_at) }}</td>
-              <td class="py-1">{{ m.description }}</td>
-              <td class="py-1 text-right tabular-nums">{{ m.kcal }}</td>
+              <td class="py-1">
+                {{ m.description }}
+                <span v-if="portions(m.portions)" class="text-xs text-muted">{{
+                  portions(m.portions)
+                }}</span>
+              </td>
+              <td class="py-1 text-right tabular-nums text-danger/75">
+                {{ m.kcal }} <span class="text-xs text-muted">kcal</span>
+              </td>
+            </tr>
+            <tr v-if="!d.meals.length" class="border-t border-edge">
+              <td class="py-1 text-muted" colspan="3">Nothing logged.</td>
+            </tr>
+            <tr class="border-t border-edge">
+              <td></td>
+              <td class="py-1 text-muted">{{ ledger(d).food.label }}</td>
+              <td class="py-1 text-right font-medium tabular-nums text-danger">
+                {{ signed(ledger(d).food.kcal) }}
+              </td>
+            </tr>
+            <tr v-for="a in d.activities" :key="a.id" class="border-t border-edge">
+              <td class="w-12 py-1 pr-3 font-mono text-xs text-muted">{{ time(a.started_at) }}</td>
+              <td class="py-1">
+                {{ a.kind }} <span class="text-xs text-muted">{{ formatMinutes(a.minutes) }}</span>
+              </td>
+              <td
+                class="py-1 text-right tabular-nums"
+                :class="a.kcal ? 'text-ok/75' : 'text-muted'"
+              >
+                {{ a.kcal ?? '—' }} <span v-if="a.kcal" class="text-xs text-muted">kcal</span>
+              </td>
+            </tr>
+            <tr
+              v-for="(l, n) in ledger(d).tail"
+              :key="l.label"
+              class="border-t"
+              :class="l.tone === 'total' ? 'border-fg/30' : 'border-edge'"
+            >
+              <td></td>
+              <td class="py-1" :class="l.tone === 'total' ? 'font-medium' : 'text-muted'">
+                {{ l.label }}
+              </td>
+              <td
+                class="py-1 text-right font-medium tabular-nums"
+                :class="[
+                  l.kcal < 0 ? 'text-danger' : 'text-ok',
+                  l.tone === 'total' ? 'text-base' : '',
+                ]"
+                :data-testid="n === ledger(d).tail.length - 1 ? 'ledger-total' : undefined"
+              >
+                {{ signed(l.kcal) }}
+              </td>
             </tr>
           </tbody>
         </table>
-        <p v-else class="mt-2 text-sm text-muted">Nothing logged.</p>
-        <ul v-if="d.activities.length" class="mt-2 border-t border-edge pt-2 text-sm">
-          <li v-for="a in d.activities" :key="a.id" class="flex gap-2 py-0.5">
-            <span class="font-mono text-xs text-muted">{{ time(a.started_at) }}</span>
-            <span>{{ a.kind }}</span>
-            <span class="text-muted">{{ formatMinutes(a.minutes) }}</span>
-            <span class="flex-1"></span>
-            <span v-if="a.kcal" class="tabular-nums text-muted">{{ a.kcal }} kcal</span>
-          </li>
-        </ul>
       </section>
     </div>
 
