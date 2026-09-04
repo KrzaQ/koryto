@@ -129,7 +129,10 @@ async fn households_users_and_origin_location() {
         )
         .await
         .unwrap();
-    assert!(carol.household_id.is_none());
+    // Everyone gets a household of their own at first login, named after them.
+    let own = db.get_household(carol.household_id.unwrap()).await.unwrap();
+    assert_eq!(own.name, "Carol@Example.com");
+    assert_eq!(db.household_members(own.id).await.unwrap().len(), 1);
     assert_eq!(
         db.find_user_by_email("carol@example.com")
             .await
@@ -662,6 +665,126 @@ async fn foods_are_unique_per_household_until_archived() {
         ("Dal", Some(22))
     );
     db.set_food_archived(curry.id, false).await.unwrap();
+    t.finish().await;
+}
+
+#[tokio::test]
+async fn joining_moves_foods_and_leaving_forks_them() {
+    let t = db_or_skip!();
+    let db = &t.db;
+    // Two people alone, each with a food; Alice's "Dal" clashes with Bob's.
+    let alice = db
+        .upsert_user(
+            "alice",
+            Some("alice@example.com"),
+            Some("Alice"),
+            "Europe/Warsaw",
+        )
+        .await
+        .unwrap();
+    let bob = db
+        .upsert_user("bob", Some("bob@example.com"), Some("Bob"), "Europe/Warsaw")
+        .await
+        .unwrap();
+    let a_home = alice.household_id.unwrap();
+    let b_home = bob.household_id.unwrap();
+    let food = |h: i32, who: &User, name: &str, kcal: i32| NewFood {
+        household_id: h,
+        name: name.into(),
+        aliases: vec![],
+        portion: "1".into(),
+        kcal,
+        protein_g: None,
+        created_by: who.id,
+    };
+    let a_dal = db
+        .insert_food(food(a_home, &alice, "Dal", 500))
+        .await
+        .unwrap();
+    let a_oats = db
+        .insert_food(food(a_home, &alice, "Oats", 190))
+        .await
+        .unwrap();
+    let b_dal = db
+        .insert_food(food(b_home, &bob, "dal", 520))
+        .await
+        .unwrap();
+    let meal = |who: &User, f: &Food| NewMeal {
+        user_id: who.id,
+        eaten_at: utc("2026-09-04T12:00:00Z"),
+        timezone: "Europe/Warsaw".into(),
+        day: d("2026-09-04"),
+        day_override: false,
+        description: f.name.clone(),
+        kcal: f.kcal,
+        protein_g: None,
+        source: SOURCE_FOOD.into(),
+        food_id: Some(f.id),
+        portions: Some(dec("1")),
+        created_by: who.id,
+        created_via: VIA_MCP.into(),
+    };
+    let a_meal = db.insert_meal(meal(&alice, &a_dal)).await.unwrap();
+
+    // Alice joins Bob: Oats moves, Dal clashes so her meal re-points at
+    // Bob's and hers is dropped, and her empty household goes.
+    let alice = db.move_user(alice.id, Some(b_home)).await.unwrap();
+    assert_eq!(alice.household_id, Some(b_home));
+    assert!(matches!(
+        db.get_household(a_home).await,
+        Err(DbError::NotFound)
+    ));
+    assert!(matches!(
+        db.get_food(a_dal.id).await,
+        Err(DbError::NotFound)
+    ));
+    assert_eq!(db.get_food(a_oats.id).await.unwrap().household_id, b_home);
+    assert_eq!(
+        db.get_meal(a_meal.id).await.unwrap().food_id,
+        Some(b_dal.id)
+    );
+    assert_eq!(
+        db.get_meal(a_meal.id).await.unwrap().kcal,
+        500,
+        "numbers never move"
+    );
+    assert_eq!(db.search_foods(b_home, "", false).await.unwrap().len(), 2);
+
+    // Bob logs the shared dal too, then Alice leaves: Bob keeps everything,
+    // Alice gets copies and her meal follows the copy.
+    let b_meal = db.insert_meal(meal(&bob, &b_dal)).await.unwrap();
+    let alice = db.move_user(alice.id, None).await.unwrap();
+    let a_new = alice.household_id.unwrap();
+    assert_ne!(a_new, b_home);
+    assert_eq!(db.get_household(a_new).await.unwrap().name, "Alice");
+    assert_eq!(db.household_members(b_home).await.unwrap().len(), 1);
+    let bobs = db.search_foods(b_home, "", false).await.unwrap();
+    assert_eq!(bobs.len(), 2);
+    assert_eq!(
+        db.get_meal(b_meal.id).await.unwrap().food_id,
+        Some(b_dal.id)
+    );
+    let hers = db.search_foods(a_new, "", false).await.unwrap();
+    assert_eq!(hers.len(), 2);
+    let her_dal = hers.iter().find(|f| f.food.name == "dal").unwrap();
+    assert_ne!(her_dal.food.id, b_dal.id);
+    assert_eq!(
+        db.get_meal(a_meal.id).await.unwrap().food_id,
+        Some(her_dal.food.id)
+    );
+    assert_eq!(her_dal.uses, 1);
+    // Moving into the household one is already in is a no-op.
+    assert_eq!(
+        db.move_user(bob.id, Some(b_home))
+            .await
+            .unwrap()
+            .household_id,
+        Some(b_home)
+    );
+    assert!(matches!(
+        db.move_user(bob.id, Some(9999)).await,
+        Err(DbError::NotFound)
+    ));
     t.finish().await;
 }
 

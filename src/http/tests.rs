@@ -341,7 +341,7 @@ async fn dev_mode_is_a_session_in_a_household_and_manages_tokens() {
     let (s, b, _) = call(&app, req("GET", "/api/me", None, None)).await;
     assert_eq!(s, StatusCode::OK, "{b}");
     assert_eq!(b["kind"], "session");
-    assert_eq!(b["household"]["name"], "dev");
+    assert_eq!(b["household"]["name"], "Dev");
     let dev_id = b["user"]["id"].as_i64().unwrap() as i32;
 
     let (s, b, _) = call(
@@ -418,39 +418,6 @@ async fn dev_mode_is_a_session_in_a_household_and_manages_tokens() {
             "/api/tokens",
             None,
             Some(json!({"name": "x", "scopes": "read", "user_id": carol.id})),
-        ),
-    )
-    .await;
-    assert_eq!(s, StatusCode::FORBIDDEN);
-    t.finish().await;
-}
-
-#[tokio::test]
-async fn no_household_means_no_data() {
-    let t = db_or_skip!();
-    let app = strict_app(&t).await;
-    let lonely = user(&t, "lonely", "lonely@example.com", None).await;
-    let tok = token_for(&t, "lonely", &["read", "write", "edit"], Some(lonely.id)).await;
-    let (s, b, _) = call(&app, req("GET", "/api/me", Some(&tok), None)).await;
-    assert_eq!(s, StatusCode::OK, "{b}");
-    assert!(b["household"].is_null());
-    let (s, b, _) = call(&app, req("GET", "/api/day", Some(&tok), None)).await;
-    assert_eq!(s, StatusCode::FORBIDDEN, "{b}");
-    assert!(
-        b["error"]["message"]
-            .as_str()
-            .unwrap()
-            .contains("household")
-    );
-    let (s, _, _) = call(&app, req("GET", "/api/foods", Some(&tok), None)).await;
-    assert_eq!(s, StatusCode::FORBIDDEN);
-    let (s, _, _) = call(
-        &app,
-        req(
-            "POST",
-            "/api/meals",
-            Some(&tok),
-            Some(json!({"description": "x", "kcal": 1})),
         ),
     )
     .await;
@@ -1408,7 +1375,7 @@ mod oidc_flow {
     }
 
     #[tokio::test]
-    async fn member_logs_in_and_gets_a_session_without_a_household() {
+    async fn member_logs_in_and_gets_a_session_and_a_household() {
         let t = db_or_skip!();
         let iss = issuer().await;
         let app = oidc_app(&t, &iss).await;
@@ -1437,7 +1404,8 @@ mod oidc_flow {
         assert_eq!(s, StatusCode::OK, "{b}");
         assert_eq!(b["kind"], "session");
         assert_eq!(b["user"]["email"], "k@example.test");
-        assert!(b["household"].is_null());
+        assert_eq!(b["household"]["name"], "k@example.test");
+        assert_eq!(b["household"]["members"].as_array().unwrap().len(), 1);
         assert_eq!(b["timezone"], "Europe/Warsaw");
 
         let out = Request::builder()
@@ -1488,10 +1456,10 @@ mod oidc_flow {
         let (s, _, h) = call(&app, cb).await;
         assert_eq!(s, StatusCode::SEE_OTHER);
         assert!(cookie_header(&h).contains("koryto_session="));
-        // In, but in no household: the data stays out of reach.
+        // In, alone in a household of their own.
         let u = t.db.list_users().await.unwrap();
         assert_eq!(u.len(), 1);
-        assert!(u[0].household_id.is_none());
+        assert!(u[0].household_id.is_some());
         t.finish().await;
     }
 

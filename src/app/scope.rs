@@ -8,7 +8,7 @@ use super::{AppError, AppResult};
 pub fn household_of(actor: &User) -> AppResult<i32> {
     actor
         .household_id
-        .ok_or_else(|| AppError::Forbidden("you are not in a household yet".into()))
+        .ok_or_else(|| AppError::Forbidden("you are in no household; log in again".into()))
 }
 
 /// The person a request concerns: `user_id`, defaulting to the actor, who

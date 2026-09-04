@@ -29,7 +29,6 @@ const SESSION_DAYS: i64 = 30;
 /// path on its own, with the same lag a session cookie has.
 pub const DELEGATE_LOGIN_DAYS: i64 = SESSION_DAYS;
 pub const DEV_SUBJECT: &str = "dev";
-pub const DEV_HOUSEHOLD: &str = "dev";
 
 /// The request header a delegate token uses to name the acting user.
 pub const DELEGATE_HEADER: &str = "x-koryto-user";
@@ -167,20 +166,10 @@ async fn session_user(state: &AppState, jar: &PrivateCookieJar) -> Option<User> 
     state.db.get_user(id).await.ok()
 }
 
-/// The dev user, placed in the dev household so the app is usable at once.
+/// The dev user; the login gives it a household like anyone else.
 pub async fn dev_user(db: &Db, house_tz: &str) -> DbResult<User> {
-    let user = db
-        .upsert_user(DEV_SUBJECT, Some("dev@localhost"), Some("Dev"), house_tz)
-        .await?;
-    if user.household_id.is_some() {
-        return Ok(user);
-    }
-    let household = match db.find_household(DEV_HOUSEHOLD).await {
-        Ok(h) => h,
-        Err(crate::db::DbError::NotFound) => db.create_household(DEV_HOUSEHOLD).await?,
-        Err(e) => return Err(e),
-    };
-    db.set_user_household(user.id, Some(household.id)).await
+    db.upsert_user(DEV_SUBJECT, Some("dev@localhost"), Some("Dev"), house_tz)
+        .await
 }
 
 /// The principal behind an `Authorization: Bearer` header, if there is one.

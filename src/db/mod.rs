@@ -154,6 +154,151 @@ impl Db {
         )
     }
 
+    pub async fn rename_household(&self, id: i32, name: &str) -> DbResult<Household> {
+        sqlx::query_as("UPDATE households SET name = $2 WHERE id = $1 RETURNING *")
+            .bind(id)
+            .bind(name.trim())
+            .fetch_one(&self.pool)
+            .await
+            .map_err(not_found_or)
+    }
+
+    /// Move a person into `target`, or into a fresh household of their own
+    /// when `None`. Entries follow their owner by construction; foods are the
+    /// one shared table, so they are handled here, in one transaction:
+    ///
+    /// - leaving a household that keeps other members forks its foods (a copy
+    ///   of each travels with the person, their meals re-pointed at the copy);
+    /// - leaving a household that becomes empty moves the foods and deletes it;
+    /// - arriving where a food of the same name exists re-points the person's
+    ///   meals at that one and drops the incoming duplicate.
+    pub async fn move_user(&self, user_id: i32, target: Option<i32>) -> DbResult<User> {
+        let mut tx = self.pool.begin().await?;
+        let user: User = sqlx::query_as("SELECT * FROM users WHERE id = $1 FOR UPDATE")
+            .bind(user_id)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(not_found_or)?;
+        let old = user.household_id;
+        if target.is_some() && target == old {
+            return Ok(user);
+        }
+        let target_id = match target {
+            Some(id) => {
+                sqlx::query_as::<_, Household>("SELECT * FROM households WHERE id = $1")
+                    .bind(id)
+                    .fetch_one(&mut *tx)
+                    .await
+                    .map_err(not_found_or)?;
+                id
+            }
+            None => {
+                let (id,): (i32,) =
+                    sqlx::query_as("INSERT INTO households (name) VALUES ($1) RETURNING id")
+                        .bind(user.display())
+                        .fetch_one(&mut *tx)
+                        .await?;
+                id
+            }
+        };
+        if let Some(old) = old {
+            let (others,): (i64,) =
+                sqlx::query_as("SELECT count(*) FROM users WHERE household_id = $1 AND id <> $2")
+                    .bind(old)
+                    .bind(user_id)
+                    .fetch_one(&mut *tx)
+                    .await?;
+            let foods: Vec<Food> =
+                sqlx::query_as("SELECT * FROM foods WHERE household_id = $1 ORDER BY id")
+                    .bind(old)
+                    .fetch_all(&mut *tx)
+                    .await?;
+            for f in foods {
+                let existing: Option<(i32,)> = sqlx::query_as(
+                    "SELECT id FROM foods WHERE household_id = $1 AND lower(name) = lower($2) \
+                     AND archived_at IS NULL",
+                )
+                .bind(target_id)
+                .bind(&f.name)
+                .fetch_optional(&mut *tx)
+                .await?;
+                // Which meals to re-point: the person's own when forking,
+                // every remaining one when the old household empties.
+                let owner_filter = if others > 0 { user_id } else { -1 };
+                match (existing, others > 0) {
+                    (Some((to,)), fork) => {
+                        sqlx::query(
+                            "UPDATE meals SET food_id = $2 WHERE food_id = $1 \
+                             AND ($3 < 0 OR user_id = $3)",
+                        )
+                        .bind(f.id)
+                        .bind(to)
+                        .bind(owner_filter)
+                        .execute(&mut *tx)
+                        .await?;
+                        if !fork {
+                            sqlx::query("DELETE FROM foods WHERE id = $1")
+                                .bind(f.id)
+                                .execute(&mut *tx)
+                                .await?;
+                        }
+                    }
+                    (None, true) => {
+                        let (copy,): (i32,) = sqlx::query_as(
+                            "INSERT INTO foods (household_id, name, aliases, portion, kcal, protein_g, \
+                             created_by, created_at, updated_at, archived_at) \
+                             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id",
+                        )
+                        .bind(target_id)
+                        .bind(&f.name)
+                        .bind(&f.aliases)
+                        .bind(&f.portion)
+                        .bind(f.kcal)
+                        .bind(f.protein_g)
+                        .bind(user_id)
+                        .bind(f.created_at)
+                        .bind(f.updated_at)
+                        .bind(f.archived_at)
+                        .fetch_one(&mut *tx)
+                        .await?;
+                        sqlx::query(
+                            "UPDATE meals SET food_id = $2 WHERE food_id = $1 AND user_id = $3",
+                        )
+                        .bind(f.id)
+                        .bind(copy)
+                        .bind(user_id)
+                        .execute(&mut *tx)
+                        .await?;
+                    }
+                    (None, false) => {
+                        sqlx::query("UPDATE foods SET household_id = $2 WHERE id = $1")
+                            .bind(f.id)
+                            .bind(target_id)
+                            .execute(&mut *tx)
+                            .await?;
+                    }
+                }
+            }
+        }
+        let user: User =
+            sqlx::query_as("UPDATE users SET household_id = $2 WHERE id = $1 RETURNING *")
+                .bind(user_id)
+                .bind(target_id)
+                .fetch_one(&mut *tx)
+                .await?;
+        // The old household row can only go once nobody points at it.
+        if let Some(old) = old {
+            sqlx::query("DELETE FROM households h WHERE h.id = $1 AND NOT EXISTS (SELECT 1 FROM users WHERE household_id = h.id) AND NOT EXISTS (SELECT 1 FROM foods WHERE household_id = h.id)")
+                .bind(old)
+                .execute(&mut *tx)
+                .await?;
+        }
+        tx.commit().await?;
+        Ok(user)
+    }
+
+    /// Tests only: place a user without the food bookkeeping of [`Db::move_user`].
+    #[cfg(test)]
     pub async fn set_user_household(
         &self,
         user_id: i32,
@@ -169,8 +314,9 @@ impl Db {
 
     // ----- users -----------------------------------------------------------
 
-    /// Login: create or refresh the user row, and give a new user the origin
-    /// location row in `house_tz`.
+    /// Login: create or refresh the user row, give a new user the origin
+    /// location row in `house_tz`, and a household of their own so they can
+    /// keep score alone from the first day.
     pub async fn upsert_user(
         &self,
         subject: &str,
@@ -198,6 +344,20 @@ impl Db {
         .bind(house_tz)
         .execute(&mut *tx)
         .await?;
+        let user = if user.household_id.is_none() {
+            let (household,): (i32,) =
+                sqlx::query_as("INSERT INTO households (name) VALUES ($1) RETURNING id")
+                    .bind(user.display())
+                    .fetch_one(&mut *tx)
+                    .await?;
+            sqlx::query_as("UPDATE users SET household_id = $2 WHERE id = $1 RETURNING *")
+                .bind(user.id)
+                .bind(household)
+                .fetch_one(&mut *tx)
+                .await?
+        } else {
+            user
+        };
         tx.commit().await?;
         Ok(user)
     }
