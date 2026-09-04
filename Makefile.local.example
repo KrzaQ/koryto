@@ -1,0 +1,13 @@
+# Machine-specific make targets. Copy to Makefile.local (gitignored) and adjust.
+#
+# The main Makefile ends with `-include Makefile.local`, so anything defined
+# here is available as a normal target. Keep deploy hosts and extra git remotes
+# out of the committed Makefile so a fresh clone stays reproducible.
+
+.PHONY: push deploy
+
+push: ## Push to every configured remote
+	git push origin
+
+deploy: ## Rebuild and restart the stack on this host
+	docker compose up -d --build
