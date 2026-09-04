@@ -1102,6 +1102,150 @@ async fn profile_locations_and_targets() {
     t.finish().await;
 }
 
+#[tokio::test]
+async fn stats_endpoints_follow_the_days() {
+    let t = db_or_skip!();
+    let app = strict_app(&t).await;
+    let h = home(&t).await;
+    let e = &h.editor;
+    // Four weeks of 2000 kcal with weekly weigh-ins going down, a profile
+    // and a target, so every basis shows up.
+    let (s, _, _) = call(
+        &app,
+        req(
+            "PATCH",
+            &format!("/api/users/{}/profile", h.alice.id),
+            Some(e),
+            Some(json!({"height_mm": 1800, "born_on": "1990-06-15", "sex": "male"})),
+        ),
+    )
+    .await;
+    assert_eq!(s, StatusCode::OK);
+    let (s, _, _) = call(
+        &app,
+        req(
+            "POST",
+            &format!("/api/users/{}/targets", h.alice.id),
+            Some(e),
+            Some(json!({"valid_from": "2026-08-01", "kcal": 1900, "weight_kg": "76"})),
+        ),
+    )
+    .await;
+    assert_eq!(s, StatusCode::CREATED);
+    for i in 0..28 {
+        let day = chrono::NaiveDate::from_ymd_opt(2026, 8, 3).unwrap() + chrono::Duration::days(i);
+        let (s, _, _) = call(
+            &app,
+            req(
+                "POST",
+                "/api/meals",
+                Some(e),
+                Some(
+                    json!({"description": "day", "kcal": 2000, "eaten_at": format!("{day} 12:00")}),
+                ),
+            ),
+        )
+        .await;
+        assert_eq!(s, StatusCode::CREATED);
+        if i % 7 == 0 {
+            let kg = format!("{}", 80.0 - 0.1 * (i as f64));
+            let (s, _, _) = call(
+                &app,
+                req(
+                    "POST",
+                    "/api/weights",
+                    Some(e),
+                    Some(json!({"weight_kg": kg, "measured_at": format!("{day} 07:00")})),
+                ),
+            )
+            .await;
+            assert_eq!(s, StatusCode::CREATED);
+        }
+    }
+    let (s, b, _) = call(
+        &app,
+        req(
+            "GET",
+            "/api/stats/weight?from=2026-08-01&to=2026-08-31",
+            Some(&h.reader),
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(s, StatusCode::OK, "{b}");
+    assert_eq!(b["points"].as_array().unwrap().len(), 4);
+    assert_eq!(b["points"][0]["weight_g"], 80000);
+    assert_eq!(b["points"][0]["trend_g"], 80000);
+    assert!(b["points"][3]["trend_g"].as_i64().unwrap() < 80000);
+    assert_eq!(b["goal_g"], 76000);
+
+    let (s, b, _) = call(
+        &app,
+        req(
+            "GET",
+            "/api/stats/expenditure?from=2026-08-03&to=2026-08-30",
+            Some(&h.reader),
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(s, StatusCode::OK, "{b}");
+    let days = b["days"].as_array().unwrap();
+    assert_eq!(days.len(), 28);
+    assert_eq!(days[0]["basis"], "seed");
+    assert_eq!(days[27]["basis"], "adaptive");
+    assert_eq!(b["latest"]["basis"], "adaptive");
+    // Lost 2.1 kg of trend... only the trend moves, slowly: expenditure is a bit above 2000.
+    assert!(b["latest"]["kcal"].as_i64().unwrap() > 2000, "{b}");
+
+    let (s, b, _) = call(
+        &app,
+        req(
+            "GET",
+            "/api/stats/weekly?from=2026-08-03&to=2026-08-30",
+            Some(&h.reader),
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(s, StatusCode::OK, "{b}");
+    let weeks = b["weeks"].as_array().unwrap();
+    assert_eq!(weeks.len(), 4);
+    assert_eq!(weeks[0]["week"], "2026-W32");
+    assert_eq!(weeks[0]["start"], "2026-08-03");
+    assert_eq!(weeks[0]["days"], 7);
+    assert_eq!(weeks[0]["logged_days"], 7);
+    assert_eq!(weeks[0]["mean_kcal"], 2000);
+    assert_eq!(weeks[0]["mean_balance_vs_target"], 100);
+    assert!(weeks[3]["mean_expenditure"].as_i64().unwrap() > 2000);
+    let (s, _, _) = call(
+        &app,
+        req(
+            "GET",
+            &format!(
+                "/api/stats/weekly?from=2026-08-03&to=2026-08-30&user={}",
+                h.bob.id
+            ),
+            Some(&h.reader),
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(s, StatusCode::OK);
+    let (s, _, _) = call(
+        &app,
+        req(
+            "GET",
+            "/api/stats/weight?from=2026-08-31&to=2026-08-01",
+            Some(&h.reader),
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
+    t.finish().await;
+}
+
 mod oidc_flow {
     use chrono::{Duration, Utc};
     use openidconnect::core::{

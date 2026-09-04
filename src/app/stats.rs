@@ -158,3 +158,86 @@ pub async fn summary(db: &Db, user: &User, from: NaiveDate, to: NaiveDate) -> Ap
         rows,
     })
 }
+
+/// One ISO week of a range, for the weekly balance chart.
+#[derive(Debug, Clone, Serialize, ToSchema, PartialEq)]
+pub struct Week {
+    /// ISO week, e.g. 2026-W36
+    pub week: String,
+    /// The Monday
+    pub start: NaiveDate,
+    /// Days of the week that fall inside the requested range
+    pub days: usize,
+    pub logged_days: usize,
+    pub mean_kcal: Option<i32>,
+    pub total_kcal: i32,
+    pub sport_minutes: i32,
+    /// Mean intake minus target over logged days with a target
+    pub mean_balance_vs_target: Option<i32>,
+    /// Mean expenditure estimate over the week's days that have one
+    pub mean_expenditure: Option<i32>,
+    /// Mean intake minus mean expenditure, when both exist
+    pub mean_balance_vs_expenditure: Option<i32>,
+}
+
+pub async fn weekly(db: &Db, user: &User, from: NaiveDate, to: NaiveDate) -> AppResult<Vec<Week>> {
+    use chrono::Datelike;
+    let rows = day::days(db, user, from, to).await?;
+    let estimates = expenditure_series(db, user, from, to).await?;
+    let mean = |xs: &[i64]| -> Option<i32> {
+        (!xs.is_empty()).then(|| {
+            crate::domain::trend::round_div(xs.iter().sum::<i64>(), xs.len() as i64) as i32
+        })
+    };
+    let mut out: Vec<Week> = Vec::new();
+    for row in &rows {
+        let iso = row.day.iso_week();
+        let label = format!("{}-W{:02}", iso.year(), iso.week());
+        let monday = row.day - Duration::days(i64::from(row.day.weekday().num_days_from_monday()));
+        if out.last().is_none_or(|w| w.week != label) {
+            out.push(Week {
+                week: label,
+                start: monday,
+                days: 0,
+                logged_days: 0,
+                mean_kcal: None,
+                total_kcal: 0,
+                sport_minutes: 0,
+                mean_balance_vs_target: None,
+                mean_expenditure: None,
+                mean_balance_vs_expenditure: None,
+            });
+        }
+        let w = out.last_mut().expect("pushed");
+        w.days += 1;
+        w.sport_minutes += row.sport_minutes;
+        if row.logged {
+            w.logged_days += 1;
+            w.total_kcal += row.kcal.unwrap_or(0);
+        }
+    }
+    // Second pass for the means, per week.
+    for w in &mut out {
+        let in_week = |d: NaiveDate| d >= w.start && d < w.start + Duration::days(7);
+        let kcal: Vec<i64> = rows
+            .iter()
+            .filter(|r| in_week(r.day))
+            .filter_map(|r| r.kcal.map(i64::from))
+            .collect();
+        let balance: Vec<i64> = rows
+            .iter()
+            .filter(|r| in_week(r.day))
+            .filter_map(|r| r.balance.map(i64::from))
+            .collect();
+        let exp: Vec<i64> = estimates
+            .iter()
+            .filter(|(d, _)| in_week(*d))
+            .filter_map(|(_, e)| e.kcal.map(i64::from))
+            .collect();
+        w.mean_kcal = mean(&kcal);
+        w.mean_balance_vs_target = mean(&balance);
+        w.mean_expenditure = mean(&exp);
+        w.mean_balance_vs_expenditure = w.mean_kcal.zip(w.mean_expenditure).map(|(k, e)| k - e);
+    }
+    Ok(out)
+}

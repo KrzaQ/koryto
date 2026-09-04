@@ -5,6 +5,7 @@ pub mod dto;
 pub mod entries;
 pub mod foods;
 pub mod profile;
+pub mod stats;
 pub mod tokens;
 
 use axum::Json;
@@ -38,6 +39,9 @@ pub fn read_routes() -> OpenApiRouter<AppState> {
         .routes(routes!(entries::list_meals))
         .routes(routes!(entries::list_weights))
         .routes(routes!(entries::list_activities))
+        .routes(routes!(stats::weight))
+        .routes(routes!(stats::expenditure))
+        .routes(routes!(stats::weekly))
 }
 
 pub fn write_routes() -> OpenApiRouter<AppState> {
