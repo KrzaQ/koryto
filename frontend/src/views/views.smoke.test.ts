@@ -504,6 +504,24 @@ describe('views', () => {
     expect(errors).toEqual([])
   })
 
+  it('DayView asks before voiding', async () => {
+    const w = await render(DayView, { day: '2026-09-04' })
+    const button = w.find('[data-testid="void-weight"]')
+    expect(button.text()).toBe('void')
+    // The first click only arms it; nothing is sent.
+    await button.trigger('click')
+    expect(button.text()).toBe('sure?')
+    expect(calls.some((c) => c.includes('/void'))).toBe(false)
+    // Losing focus puts it back.
+    await button.trigger('blur')
+    expect(button.text()).toBe('void')
+    await button.trigger('click')
+    await button.trigger('click')
+    await flushPromises()
+    expect(calls.some((c) => c.startsWith('POST /api/weights/20/void'))).toBe(true)
+    expect(errors).toEqual([])
+  })
+
   it('DayView follows the person chooser', async () => {
     usePerson().set(2)
     const w = await render(DayView, { day: '2026-09-04' })

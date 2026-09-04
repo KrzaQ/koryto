@@ -12,6 +12,7 @@ import type {
   WeightDto,
 } from '@/api/types'
 import BudgetChart from '@/components/BudgetChart.vue'
+import ConfirmButton from '@/components/ConfirmButton.vue'
 import DayHeader from '@/components/DayHeader.vue'
 import MealEditor from '@/components/MealEditor.vue'
 import { dayLabel, shiftDay } from '@/lib/day'
@@ -289,9 +290,12 @@ onMounted(load)
                 <td class="px-3 py-2 font-mono text-xs">{{ time(w.measured_at) }}</td>
                 <td class="px-3 py-2 tabular-nums">{{ w.weight_kg }} kg</td>
                 <td class="px-3 py-2 text-right">
-                  <button v-if="!w.voided" class="link text-xs text-danger" @click="voidWeight(w)">
-                    void
-                  </button>
+                  <ConfirmButton
+                    v-if="!w.voided"
+                    class="link text-xs text-danger"
+                    data-testid="void-weight"
+                    @confirm="voidWeight(w)"
+                  />
                   <button v-else class="link text-xs" @click="unvoid('weights', w.id)">
                     restore
                   </button>
@@ -365,13 +369,12 @@ onMounted(load)
                   ><span v-if="a.kcal" class="text-xs text-muted"> · {{ a.kcal }} kcal</span>
                 </td>
                 <td class="px-3 py-2 text-right">
-                  <button
+                  <ConfirmButton
                     v-if="!a.voided"
                     class="link text-xs text-danger"
-                    @click="voidActivity(a)"
-                  >
-                    void
-                  </button>
+                    data-testid="void-activity"
+                    @confirm="voidActivity(a)"
+                  />
                   <button v-else class="link text-xs" @click="unvoid('activities', a.id)">
                     restore
                   </button>

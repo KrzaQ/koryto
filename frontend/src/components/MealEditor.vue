@@ -6,6 +6,7 @@ import type { FoodDto, MealDto, MealInput, MealPatchInput } from '@/api/types'
 import { looksLikePortions } from '@/lib/units'
 import { fromLocalInput, nowLocal, toLocalInput } from '@/lib/time'
 import { useTimezone } from '@/stores/timezone'
+import ConfirmButton from './ConfirmButton.vue'
 import FoodPicker from './FoodPicker.vue'
 
 const props = defineProps<{
@@ -199,16 +200,16 @@ function submit() {
         {{ meal ? 'Save' : 'Add' }}
       </button>
       <button class="btn-secondary ml-1" :disabled="busy" @click="emit('cancel')">Cancel</button>
-      <button
+      <ConfirmButton
         v-if="meal"
         class="btn-secondary ml-1 text-danger"
         :disabled="busy"
         title="Hide this meal from every total"
         data-testid="editor-void"
-        @click="emit('void')"
-      >
-        Void
-      </button>
+        label="Void"
+        confirm-label="Sure?"
+        @confirm="emit('void')"
+      />
     </td>
   </tr>
 </template>
