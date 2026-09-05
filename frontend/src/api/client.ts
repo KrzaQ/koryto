@@ -2,6 +2,9 @@
 // server's error envelope, so views can branch on `code`.
 
 import type {
+  ActivityKindDto,
+  ActivityKindInput,
+  ActivityKindPatchInput,
   ActivityDto,
   ActivityInput,
   ActivityPatchInput,
@@ -142,6 +145,20 @@ export const api = {
       request<FoodDto>('PATCH', `/api/foods/${id}`, patch),
     archive: (id: number) => request<FoodDto>('POST', `/api/foods/${id}/archive`),
     unarchive: (id: number) => request<FoodDto>('POST', `/api/foods/${id}/unarchive`),
+  },
+  activityKinds: {
+    list: (q = '', includeArchived = false) =>
+      request<ActivityKindDto[]>('GET', '/api/activity-kinds', undefined, {
+        q,
+        include_archived: includeArchived || undefined,
+      }),
+    create: (input: ActivityKindInput) =>
+      request<ActivityKindDto>('POST', '/api/activity-kinds', input),
+    update: (id: number, patch: ActivityKindPatchInput) =>
+      request<ActivityKindDto>('PATCH', `/api/activity-kinds/${id}`, patch),
+    archive: (id: number) => request<ActivityKindDto>('POST', `/api/activity-kinds/${id}/archive`),
+    unarchive: (id: number) =>
+      request<ActivityKindDto>('POST', `/api/activity-kinds/${id}/unarchive`),
   },
   meals: {
     list: (r: Range) => request<MealDto[]>('GET', '/api/meals', undefined, r),

@@ -68,6 +68,70 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/activity-kinds': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get: operations['list_kinds']
+    put?: never
+    post: operations['create_kind']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/activity-kinds/{id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch: operations['update_kind']
+    trace?: never
+  }
+  '/api/activity-kinds/{id}/archive': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    post: operations['archive_kind']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/activity-kinds/{id}/unarchive': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    post: operations['unarchive_kind']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/auth/callback': {
     parameters: {
       query?: never
@@ -555,6 +619,8 @@ export interface components {
   schemas: {
     ActivityDto: {
       /** Format: int32 */
+      activity_kind_id?: number | null
+      /** Format: int32 */
       created_by: number
       created_via: string
       /** Format: date */
@@ -570,6 +636,8 @@ export interface components {
       /** Format: int32 */
       minutes: number
       note: string
+      /** @description "manual" when the number was given, "met" when the kind's rate filled it in */
+      source: string
       /** Format: date-time */
       started_at: string
       timezone: string
@@ -584,7 +652,7 @@ export interface components {
       duration: string
       /**
        * Format: int32
-       * @description Informational only; never enters the balance
+       * @description The number the person gives; without it the kind's MET rate fills it in
        */
       kcal?: number | null
       /** @description run, gym, cycling, ... */
@@ -594,6 +662,35 @@ export interface components {
       timezone?: string | null
       /** Format: int32 */
       user_id?: number | null
+    }
+    ActivityKindDto: {
+      aliases: string[]
+      /** Format: date-time */
+      archived_at?: string | null
+      /** Format: int32 */
+      id: number
+      /** @description Multiple of resting metabolism; a session earns (met − 1) × kg × hours */
+      met: string
+      name: string
+      note: string
+      /**
+       * Format: int64
+       * @description Non-voided sessions whose kcal came from this rate
+       */
+      uses: number
+    }
+    ActivityKindInput: {
+      aliases?: string[]
+      /** @description "3.5"; 1.0 is lying still, 3.5 a walk, 9 a run */
+      met: string
+      name: string
+      note?: string
+    }
+    ActivityKindPatchInput: {
+      aliases?: string[] | null
+      met?: string | null
+      name?: string | null
+      note?: string | null
     }
     ActivityPatchInput: {
       day?: string | null
@@ -1387,6 +1484,167 @@ export interface operations {
         }
       }
       409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorBody']
+        }
+      }
+    }
+  }
+  list_kinds: {
+    parameters: {
+      query?: {
+        /** @description Fragment of the name or an alias; empty lists everything */
+        q?: string | null
+        include_archived?: boolean
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ActivityKindDto'][]
+        }
+      }
+    }
+  }
+  create_kind: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ActivityKindInput']
+      }
+    }
+    responses: {
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ActivityKindDto']
+        }
+      }
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorBody']
+        }
+      }
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorBody']
+        }
+      }
+    }
+  }
+  update_kind: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ActivityKindPatchInput']
+      }
+    }
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ActivityKindDto']
+        }
+      }
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorBody']
+        }
+      }
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorBody']
+        }
+      }
+    }
+  }
+  archive_kind: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ActivityKindDto']
+        }
+      }
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ErrorBody']
+        }
+      }
+    }
+  }
+  unarchive_kind: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ActivityKindDto']
+        }
+      }
+      404: {
         headers: {
           [name: string]: unknown
         }

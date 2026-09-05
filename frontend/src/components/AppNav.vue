@@ -13,7 +13,7 @@ const links = [
   { to: '/', label: 'Home', match: '/home' },
   { to: '/d/today', label: 'Day', match: '/d' },
   { to: '/trends', label: 'Trends', match: '/trends' },
-  { to: '/foods', label: 'Foods', match: '/foods' },
+  { to: '/foods', label: 'Reference', match: '/foods' },
   { to: '/profile', label: 'Profile', match: '/profile' },
   { to: '/tokens', label: 'Tokens', match: '/tokens' },
 ]

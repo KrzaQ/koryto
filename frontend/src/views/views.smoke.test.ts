@@ -210,6 +210,20 @@ function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respon
   if (path === '/api/me') return Promise.resolve(json(me))
   if (path === '/api/day') return Promise.resolve(json(day))
   if (path === '/api/foods') return Promise.resolve(json(foods))
+  if (path === '/api/activity-kinds')
+    return Promise.resolve(
+      json([
+        {
+          id: 1,
+          name: 'walk',
+          aliases: ['spacer'],
+          met: '3.50',
+          note: 'about 5 km/h, flat',
+          archived_at: null,
+          uses: 2,
+        },
+      ]),
+    )
   if (path === '/api/tokens') return Promise.resolve(json(tokens))
   if (path === '/api/users/1/targets') return Promise.resolve(json([me.target]))
   if (path === '/api/users/1/locations')
@@ -528,6 +542,16 @@ describe('views', () => {
     expect(calls.some((c) => c.startsWith('GET /api/day?user=2&date=2026-09-04'))).toBe(true)
     expect(w.find('[data-testid="person-note"]').text()).toBe('Bob')
     usePerson().set(1)
+    expect(errors).toEqual([])
+  })
+
+  it('FoodsView shows the sport kinds behind its tab', async () => {
+    const w = await render(FoodsView)
+    await w.find('[data-testid="tab-sport"]').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-testid="kinds-panel"]').text()).toContain('walk')
+    expect(w.find('[data-testid="kinds-panel"]').text()).toContain('3.50')
+    expect(calls.some((c) => c.startsWith('GET /api/activity-kinds'))).toBe(true)
     expect(errors).toEqual([])
   })
 

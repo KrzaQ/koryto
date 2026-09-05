@@ -16,7 +16,7 @@ import ConfirmButton from '@/components/ConfirmButton.vue'
 import DayHeader from '@/components/DayHeader.vue'
 import MealEditor from '@/components/MealEditor.vue'
 import { dayLabel, shiftDay } from '@/lib/day'
-import { formatDateTime, fromLocalInput, nowLocal, zoneCity } from '@/lib/time'
+import { formatDateTime, fromLocalInput, nowLocal, toLocalInput, zoneCity } from '@/lib/time'
 import { looksLikeDuration, looksLikeKg } from '@/lib/units'
 import { usePerson } from '@/stores/person'
 import { useSession } from '@/stores/session'
@@ -95,16 +95,28 @@ function unvoid(kind: 'meals' | 'weights' | 'activities', id: number) {
 
 // Weigh-ins and sport are small enough for one-line forms.
 const weightForm = reactive({ open: false, kg: '', at: '' })
-const sportForm = reactive({ open: false, kind: '', duration: '', kcal: '', at: '' })
+const sportForm = reactive({ open: false, id: 0, kind: '', duration: '', kcal: '', at: '' })
 function openWeight() {
   weightForm.open = true
   weightForm.at = nowLocal(tz.zone)
   if (!weightForm.at.startsWith(props.day)) weightForm.at = `${props.day}T07:00`
 }
 function openSport() {
-  sportForm.open = true
+  Object.assign(sportForm, { open: true, id: 0, kind: '', duration: '', kcal: '' })
   sportForm.at = nowLocal(tz.zone)
   if (!sportForm.at.startsWith(props.day)) sportForm.at = `${props.day}T17:00`
+}
+/** Edit a session: an empty kcal box hands the number back to the rate. */
+function editSport(a: ActivityDto) {
+  if (a.voided) return
+  Object.assign(sportForm, {
+    open: true,
+    id: a.id,
+    kind: a.kind,
+    duration: a.duration,
+    kcal: a.source === 'met' ? '' : String(a.kcal ?? ''),
+    at: toLocalInput(a.started_at, tz.zone),
+  })
 }
 const weightValid = computed(() => looksLikeKg(weightForm.kg) && weightForm.at.length >= 16)
 const sportValid = computed(
@@ -126,16 +138,24 @@ async function addWeight() {
 }
 async function addSport() {
   if (!sportValid.value) return
+  const kcal = sportForm.kcal.trim() ? Number(sportForm.kcal) : null
   const ok = await run(() =>
-    api.activities.create({
-      user_id: person.id,
-      kind: sportForm.kind.trim(),
-      duration: sportForm.duration.trim(),
-      kcal: sportForm.kcal.trim() ? Number(sportForm.kcal) : null,
-      started_at: fromLocalInput(sportForm.at, tz.zone),
-    }),
+    sportForm.id
+      ? api.activities.update(sportForm.id, {
+          kind: sportForm.kind.trim(),
+          duration: sportForm.duration.trim(),
+          kcal,
+          started_at: fromLocalInput(sportForm.at, tz.zone),
+        })
+      : api.activities.create({
+          user_id: person.id,
+          kind: sportForm.kind.trim(),
+          duration: sportForm.duration.trim(),
+          kcal,
+          started_at: fromLocalInput(sportForm.at, tz.zone),
+        }),
   )
-  if (ok) Object.assign(sportForm, { open: false, kind: '', duration: '', kcal: '' })
+  if (ok) Object.assign(sportForm, { open: false, id: 0, kind: '', duration: '', kcal: '' })
 }
 function voidWeight(w: WeightDto) {
   run(() => api.weights.void(w.id))
@@ -358,15 +378,24 @@ onMounted(load)
             <tbody>
               <tr
                 v-for="a in data.activities"
+                v-show="sportForm.id !== a.id"
                 :key="a.id"
                 class="border-t border-edge"
                 :class="rowClass(a)"
                 data-testid="activity-row"
+                :title="a.voided ? 'Voided' : 'Double-click to edit'"
+                @dblclick="editSport(a)"
               >
                 <td class="px-3 py-2 font-mono text-xs">{{ time(a.started_at) }}</td>
                 <td class="px-3 py-2">
                   {{ a.kind }} <span class="text-muted">{{ a.duration }}</span
                   ><span v-if="a.kcal" class="text-xs text-muted"> · {{ a.kcal }} kcal</span>
+                  <span
+                    v-if="a.source === 'met'"
+                    class="chip ml-1"
+                    title="From the kind's MET rate and your weight"
+                    >rate</span
+                  >
                 </td>
                 <td class="px-3 py-2 text-right">
                   <ConfirmButton
@@ -408,8 +437,10 @@ onMounted(load)
                   <input
                     v-model="sportForm.kcal"
                     class="ml-1 w-16 text-right"
-                    placeholder="kcal"
+                    placeholder="auto"
+                    title="Leave empty to take the kcal from the kind's rate"
                     inputmode="numeric"
+                    data-testid="sport-kcal"
                     @keydown.enter="addSport"
                   />
                 </td>
@@ -420,7 +451,7 @@ onMounted(load)
                     data-testid="sport-save"
                     @click="addSport"
                   >
-                    Add
+                    {{ sportForm.id ? 'Save' : 'Add' }}
                   </button>
                   <button class="btn-secondary ml-1" @click="sportForm.open = false">Cancel</button>
                 </td>
