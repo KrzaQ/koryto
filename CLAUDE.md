@@ -37,6 +37,11 @@ this one copies its bones from.
   recomputes leave alone.
 - The zone for a user at an instant comes from `user_locations`, the row with
   the greatest `valid_from <= instant`. Every user has a `-infinity` row.
+- A session's kcal comes from its kind's MET rate when the person does not
+  give one: `(met − 1) × trend weight × hours`, the `− 1` because the base
+  already pays for those hours at rest. `activity_kinds` is shared reference
+  data; editing a rate leaves logged sessions alone, and a kcal given by hand
+  is an override (`source` says `manual` or `met`).
 - Expenditure on a day is a base plus that day's logged sport kcal. The base
   is derived from intake, sport and the weight trend over a rolling window
   (so habitual sport is not counted twice), seeded by Mifflin-St Jeor times

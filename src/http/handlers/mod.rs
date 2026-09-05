@@ -4,6 +4,7 @@
 pub mod dto;
 pub mod entries;
 pub mod foods;
+pub mod kinds;
 pub mod profile;
 pub mod stats;
 pub mod tokens;
@@ -34,6 +35,7 @@ pub fn read_routes() -> OpenApiRouter<AppState> {
         .routes(routes!(profile::list_locations))
         .routes(routes!(profile::list_targets))
         .routes(routes!(foods::list_foods))
+        .routes(routes!(kinds::list_kinds))
         .routes(routes!(entries::day))
         .routes(routes!(entries::days))
         .routes(routes!(entries::list_meals))
@@ -56,6 +58,10 @@ pub fn write_routes() -> OpenApiRouter<AppState> {
         .routes(routes!(foods::update_food))
         .routes(routes!(foods::archive_food))
         .routes(routes!(foods::unarchive_food))
+        .routes(routes!(kinds::create_kind))
+        .routes(routes!(kinds::update_kind))
+        .routes(routes!(kinds::archive_kind))
+        .routes(routes!(kinds::unarchive_kind))
         .routes(routes!(entries::create_meals))
         .routes(routes!(entries::update_meal))
         .routes(routes!(entries::void_meal))

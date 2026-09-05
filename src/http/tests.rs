@@ -667,6 +667,101 @@ async fn meals_for_two_people_from_a_food_and_the_day_view() {
     assert_eq!(b["kind"], "run");
     assert_eq!(b["minutes"], 90);
     assert_eq!(b["duration"], "1h30");
+    // A number given by hand is an override: the kind is recorded, the rate
+    // is not used.
+    assert_eq!(b["source"], "manual");
+    assert_eq!(b["kcal"], 600);
+    assert!(b["activity_kind_id"].as_i64().is_some());
+
+    // Without a number the kind's rate and the day's trend weight do the
+    // work: 82.4 kg walking for an hour at 3.5 MET is (3.5 - 1) x 82.4 = 206.
+    let (s, b, _) = call(
+        &app,
+        req(
+            "POST",
+            "/api/activities",
+            Some(e),
+            Some(json!({"kind": "spacer", "duration": "1h", "started_at": "2026-09-04 15:00"})),
+        ),
+    )
+    .await;
+    assert_eq!(s, StatusCode::CREATED, "{b}");
+    assert_eq!(b["kind"], "spacer");
+    assert_eq!(b["source"], "met");
+    assert_eq!(b["kcal"], 206);
+    let walk = b["id"].as_i64().unwrap();
+
+    // Doubling the duration recomputes it; a hand-set number stops that.
+    let (s, b, _) = call(
+        &app,
+        req(
+            "PATCH",
+            &format!("/api/activities/{walk}"),
+            Some(e),
+            Some(json!({"duration": "2h"})),
+        ),
+    )
+    .await;
+    assert_eq!(s, StatusCode::OK, "{b}");
+    assert_eq!(b["kcal"], 412);
+    assert_eq!(b["source"], "met");
+    let (s, b, _) = call(
+        &app,
+        req(
+            "PATCH",
+            &format!("/api/activities/{walk}"),
+            Some(e),
+            Some(json!({"kcal": 500})),
+        ),
+    )
+    .await;
+    assert_eq!(s, StatusCode::OK, "{b}");
+    assert_eq!(
+        (b["kcal"].as_i64(), b["source"].as_str()),
+        (Some(500), Some("manual"))
+    );
+    let (s, b, _) = call(
+        &app,
+        req(
+            "PATCH",
+            &format!("/api/activities/{walk}"),
+            Some(e),
+            Some(json!({"duration": "1h"})),
+        ),
+    )
+    .await;
+    assert_eq!(s, StatusCode::OK, "{b}");
+    assert_eq!(
+        (b["kcal"].as_i64(), b["source"].as_str()),
+        (Some(500), Some("manual"))
+    );
+    // Clearing it asks the rate again.
+    let (s, b, _) = call(
+        &app,
+        req(
+            "PATCH",
+            &format!("/api/activities/{walk}"),
+            Some(e),
+            Some(json!({"kcal": null})),
+        ),
+    )
+    .await;
+    assert_eq!(s, StatusCode::OK, "{b}");
+    assert_eq!(
+        (b["kcal"].as_i64(), b["source"].as_str()),
+        (Some(206), Some("met"))
+    );
+    let (s, _, _) = call(
+        &app,
+        req(
+            "POST",
+            &format!("/api/activities/{walk}/void"),
+            Some(e),
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(s, StatusCode::NO_CONTENT);
 
     let (s, b, _) = call(
         &app,

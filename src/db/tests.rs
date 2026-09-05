@@ -496,6 +496,8 @@ async fn totals_skip_voided_and_take_the_first_weight() {
             kind: " Run ".into(),
             minutes: 45,
             kcal: Some(400),
+            source: SOURCE_MANUAL.into(),
+            activity_kind_id: None,
             note: String::new(),
             created_by: a.id,
             created_via: VIA_MCP.into(),

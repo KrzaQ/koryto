@@ -64,7 +64,7 @@ const MEAL_COLS: &str = "user_id, eaten_at, timezone, day, day_override, descrip
 const WEIGHT_COLS: &str =
     "user_id, measured_at, timezone, day, day_override, weight_g, created_by, created_via";
 const ACTIVITY_COLS: &str = "user_id, started_at, timezone, day, day_override, kind, minutes, \
-                             kcal, note, created_by, created_via";
+                             kcal, source, activity_kind_id, note, created_by, created_via";
 
 impl Db {
     /// Lazy: the first query opens the connection, so `serve` can come up
@@ -879,7 +879,7 @@ impl Db {
     pub async fn insert_activity(&self, a: NewActivity) -> DbResult<Activity> {
         sqlx::query_as(&format!(
             "INSERT INTO activities ({ACTIVITY_COLS}) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *"
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *"
         ))
         .bind(a.user_id)
         .bind(a.started_at)
@@ -889,6 +889,8 @@ impl Db {
         .bind(a.kind.trim().to_lowercase())
         .bind(a.minutes)
         .bind(a.kcal)
+        .bind(&a.source)
+        .bind(a.activity_kind_id)
         .bind(a.note.trim())
         .bind(a.created_by)
         .bind(&a.created_via)
@@ -903,7 +905,9 @@ impl Db {
              timezone = COALESCE($3, timezone), day = COALESCE($4, day), \
              day_override = COALESCE($5, day_override), kind = COALESCE($6, kind), \
              minutes = COALESCE($7, minutes), kcal = CASE WHEN $8 THEN $9 ELSE kcal END, \
-             note = COALESCE($10, note), updated_at = now() WHERE id = $1 RETURNING *",
+             source = COALESCE($10, source), \
+             activity_kind_id = CASE WHEN $11 THEN $12 ELSE activity_kind_id END, \
+             note = COALESCE($13, note), updated_at = now() WHERE id = $1 RETURNING *",
         )
         .bind(id)
         .bind(p.started_at)
@@ -914,6 +918,9 @@ impl Db {
         .bind(p.minutes)
         .bind(p.kcal.is_some())
         .bind(p.kcal.flatten())
+        .bind(p.source)
+        .bind(p.activity_kind_id.is_some())
+        .bind(p.activity_kind_id.flatten())
         .bind(p.note.map(|n| n.trim().to_string()))
         .fetch_one(&self.pool)
         .await
@@ -1025,6 +1032,116 @@ impl Db {
         .bind(to)
         .fetch_all(&self.pool)
         .await?)
+    }
+
+    /// Every kind, archived ones only when asked, best match for `query` first.
+    pub async fn search_activity_kinds(
+        &self,
+        query: &str,
+        include_archived: bool,
+    ) -> DbResult<Vec<ActivityKind>> {
+        let q = query.trim();
+        Ok(sqlx::query_as(
+            "SELECT * FROM activity_kinds \
+             WHERE (archived_at IS NULL OR $2) \
+               AND ($1 = '' OR name ILIKE '%' || $1 || '%' \
+                    OR EXISTS (SELECT 1 FROM unnest(aliases) a WHERE a ILIKE '%' || $1 || '%')) \
+             ORDER BY (lower(name) = lower($1) OR lower($1) = ANY (SELECT lower(a) FROM unnest(aliases) a)) DESC, \
+                      lower(name), id",
+        )
+        .bind(q)
+        .bind(include_archived)
+        .fetch_all(&self.pool)
+        .await?)
+    }
+
+    /// Exact match on name or alias, case-insensitive, unarchived only.
+    pub async fn find_activity_kind(&self, name: &str) -> DbResult<Option<ActivityKind>> {
+        Ok(sqlx::query_as(
+            "SELECT * FROM activity_kinds WHERE archived_at IS NULL \
+               AND (lower(name) = lower($1) \
+                    OR lower($1) = ANY (SELECT lower(a) FROM unnest(aliases) a)) \
+             ORDER BY (lower(name) = lower($1)) DESC, id LIMIT 1",
+        )
+        .bind(name.trim())
+        .fetch_optional(&self.pool)
+        .await?)
+    }
+
+    /// Non-voided sessions whose kcal came from this rate.
+    pub async fn activity_kind_uses(&self, id: i32) -> DbResult<i64> {
+        let (n,): (i64,) = sqlx::query_as(
+            "SELECT count(*) FROM activities WHERE activity_kind_id = $1 AND voided_at IS NULL",
+        )
+        .bind(id)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(n)
+    }
+
+    pub async fn get_activity_kind(&self, id: i32) -> DbResult<ActivityKind> {
+        sqlx::query_as("SELECT * FROM activity_kinds WHERE id = $1")
+            .bind(id)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(not_found_or)
+    }
+
+    pub async fn insert_activity_kind(&self, k: NewActivityKind) -> DbResult<ActivityKind> {
+        sqlx::query_as(
+            "INSERT INTO activity_kinds (name, aliases, met, note) \
+             VALUES ($1, $2, $3, $4) RETURNING *",
+        )
+        .bind(k.name.trim().to_lowercase())
+        .bind(&k.aliases)
+        .bind(k.met)
+        .bind(k.note.trim())
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| {
+            conflict_or(e, || {
+                format!("a sport kind named {:?} already exists", k.name.trim())
+            })
+        })
+    }
+
+    pub async fn update_activity_kind(
+        &self,
+        id: i32,
+        p: ActivityKindPatch,
+    ) -> DbResult<ActivityKind> {
+        sqlx::query_as(
+            "UPDATE activity_kinds SET name = COALESCE($2, name), \
+             aliases = COALESCE($3, aliases), met = COALESCE($4, met), \
+             note = COALESCE($5, note), updated_at = now() WHERE id = $1 RETURNING *",
+        )
+        .bind(id)
+        .bind(p.name.map(|n| n.trim().to_lowercase()))
+        .bind(p.aliases)
+        .bind(p.met)
+        .bind(p.note.map(|n| n.trim().to_string()))
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| match e {
+            sqlx::Error::RowNotFound => DbError::NotFound,
+            e => conflict_or(e, || "a sport kind with that name already exists".into()),
+        })
+    }
+
+    pub async fn set_activity_kind_archived(
+        &self,
+        id: i32,
+        archived: bool,
+    ) -> DbResult<ActivityKind> {
+        sqlx::query_as(
+            "UPDATE activity_kinds SET archived_at = CASE WHEN $2 THEN COALESCE(archived_at, now()) ELSE NULL END, \
+             updated_at = now() WHERE id = $1 RETURNING *",
+        )
+        .bind(id)
+        .bind(archived)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(not_found_or)
     }
 
     pub async fn activity_day_totals(

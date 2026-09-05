@@ -13,6 +13,8 @@ pub const SOURCE_MANUAL: &str = "manual";
 pub const SOURCE_LABEL: &str = "label";
 pub const SOURCE_FOOD: &str = "food";
 pub const SOURCES: [&str; 4] = [SOURCE_ESTIMATE, SOURCE_MANUAL, SOURCE_LABEL, SOURCE_FOOD];
+/// A session's kcal computed from its kind's MET rate, not given by hand.
+pub const SOURCE_MET: &str = "met";
 
 /// The origin location row of every user: far enough back that no entry
 /// can precede it. Postgres `-infinity` would do, but sqlx cannot decode it.
@@ -253,6 +255,9 @@ pub struct Activity {
     pub kind: String,
     pub minutes: i32,
     pub kcal: Option<i32>,
+    /// Where the kcal came from: "manual" (given) or "met" (from the kind's rate)
+    pub source: String,
+    pub activity_kind_id: Option<i32>,
     pub note: String,
     pub created_by: i32,
     pub created_via: String,
@@ -271,6 +276,8 @@ pub struct NewActivity {
     pub kind: String,
     pub minutes: i32,
     pub kcal: Option<i32>,
+    pub source: String,
+    pub activity_kind_id: Option<i32>,
     pub note: String,
     pub created_by: i32,
     pub created_via: String,
@@ -285,6 +292,38 @@ pub struct ActivityPatch {
     pub kind: Option<String>,
     pub minutes: Option<i32>,
     pub kcal: Option<Option<i32>>,
+    pub source: Option<String>,
+    pub activity_kind_id: Option<Option<i32>>,
+    pub note: Option<String>,
+}
+
+/// A kind of sport and what it costs: MET is the multiple of resting
+/// metabolism it demands. Reference data, shared by every household.
+#[derive(Debug, Clone, FromRow, Serialize, PartialEq)]
+pub struct ActivityKind {
+    pub id: i32,
+    pub name: String,
+    pub aliases: Vec<String>,
+    pub met: Decimal,
+    pub note: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub archived_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct NewActivityKind {
+    pub name: String,
+    pub aliases: Vec<String>,
+    pub met: Decimal,
+    pub note: String,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct ActivityKindPatch {
+    pub name: Option<String>,
+    pub aliases: Option<Vec<String>>,
+    pub met: Option<Decimal>,
     pub note: Option<String>,
 }
 

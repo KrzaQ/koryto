@@ -12,10 +12,11 @@ use super::time::{self, Resolved};
 use super::{AppError, AppResult, bad};
 use crate::db::{
     Activity, ActivityPatch, Db, EntryKind, Food, Meal, MealPatch, NewActivity, NewMeal, NewWeight,
-    SOURCE_ESTIMATE, SOURCE_FOOD, SOURCE_MANUAL, SOURCES, User, Weight, WeightPatch,
+    SOURCE_ESTIMATE, SOURCE_FOOD, SOURCE_MANUAL, SOURCE_MET, SOURCES, User, Weight, WeightPatch,
 };
 use crate::domain::day::parse_tz;
 use crate::domain::duration::parse_minutes;
+use crate::domain::met;
 use crate::domain::units::{parse_kg, parse_portions, scale};
 use crate::domain::when::When;
 
@@ -99,7 +100,7 @@ pub struct ActivityInput {
     pub kind: String,
     /// 45, 45m, 1h, 1h30, 1:30
     pub duration: String,
-    /// Informational only; never enters the balance
+    /// The number the person gives; without it the kind's MET rate fills it in
     pub kcal: Option<i32>,
     pub note: Option<String>,
 }
@@ -474,6 +475,35 @@ pub async fn update_weight(
 
 // ----- activities ----------------------------------------------------------
 
+/// What the kcal of a session should be: the number the person gave, or the
+/// kind's rate against their weight that day. The kind is recorded either
+/// way, so an overridden entry still says what it was.
+async fn activity_kcal(
+    db: &Db,
+    user: &User,
+    kind: &str,
+    minutes: i32,
+    day: NaiveDate,
+    given: Option<i32>,
+) -> AppResult<(Option<i32>, String, Option<i32>)> {
+    let known = db.find_activity_kind(kind).await?;
+    if let Some(kcal) = given {
+        return Ok((Some(kcal), SOURCE_MANUAL.into(), known.map(|k| k.id)));
+    }
+    let Some(k) = known else {
+        return Ok((None, SOURCE_MANUAL.into(), None));
+    };
+    // The trend weight, not the morning's reading: a session should not cost
+    // more because of yesterday's salt.
+    let weight = super::stats::latest_weight(db, user, day)
+        .await?
+        .map(|(_, _, trend)| trend);
+    match weight.and_then(|w| met::kcal(k.met, w, minutes)) {
+        Some(kcal) => Ok((Some(kcal), SOURCE_MET.into(), Some(k.id))),
+        None => Ok((None, SOURCE_MANUAL.into(), Some(k.id))),
+    }
+}
+
 pub async fn log_activity(
     db: &Db,
     actor: &User,
@@ -483,8 +513,10 @@ pub async fn log_activity(
     let user = scope::member(db, actor, input.user_id).await?;
     let kind = check_text(Some(&input.kind), "kind")?;
     let minutes = parse_minutes(&input.duration).map_err(|e| bad(e.to_string()))?;
-    let kcal = non_negative(input.kcal, "kcal")?;
+    let given = non_negative(input.kcal, "kcal")?;
     let r = resolve_new(db, &user, input.started_at, &input.timezone, input.day).await?;
+    let (kcal, source, activity_kind_id) =
+        activity_kcal(db, &user, &kind, minutes, r.day, given).await?;
     Ok(db
         .insert_activity(NewActivity {
             user_id: user.id,
@@ -495,6 +527,8 @@ pub async fn log_activity(
             kind,
             minutes,
             kcal,
+            source,
+            activity_kind_id,
             note: input.note.unwrap_or_default(),
             created_by: actor.id,
             created_via: via.into(),
@@ -538,8 +572,44 @@ pub async fn update_activity(
     if let Some(d) = input.duration.as_deref() {
         patch.minutes = Some(parse_minutes(d).map_err(|e| bad(e.to_string()))?);
     }
-    if let Some(k) = input.kcal {
-        patch.kcal = Some(non_negative(k, "kcal")?);
+    // A kcal given by hand is an override and stays put. Clearing it, or
+    // changing what the rate is computed from while it still holds, asks for
+    // the rate again.
+    let kind = patch.kind.clone().unwrap_or(current.kind);
+    let minutes = patch.minutes.unwrap_or(current.minutes);
+    let day = patch.day.unwrap_or(current.day);
+    match input.kcal {
+        Some(Some(k)) => {
+            let (kcal, source, kind_id) = activity_kcal(
+                db,
+                &owner,
+                &kind,
+                minutes,
+                day,
+                Some(non_negative(Some(k), "kcal")?.expect("some")),
+            )
+            .await?;
+            patch.kcal = Some(kcal);
+            patch.source = Some(source);
+            patch.activity_kind_id = Some(kind_id);
+        }
+        Some(None) => {
+            let (kcal, source, kind_id) =
+                activity_kcal(db, &owner, &kind, minutes, day, None).await?;
+            patch.kcal = Some(kcal);
+            patch.source = Some(source);
+            patch.activity_kind_id = Some(kind_id);
+        }
+        None if current.source == SOURCE_MET
+            && (patch.kind.is_some() || patch.minutes.is_some() || patch.day.is_some()) =>
+        {
+            let (kcal, source, kind_id) =
+                activity_kcal(db, &owner, &kind, minutes, day, None).await?;
+            patch.kcal = Some(kcal);
+            patch.source = Some(source);
+            patch.activity_kind_id = Some(kind_id);
+        }
+        None => {}
     }
     patch.note = input.note;
     Ok(db.update_activity(id, patch).await?)

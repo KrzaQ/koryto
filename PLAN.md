@@ -390,6 +390,8 @@ kilograms. Tools:
 
 | Tool | Scope | Notes |
 |---|---|---|
+| `list_activity_kinds` | read | the MET table: what each kind of sport costs per kilogram per hour |
+| `set_activity_kind` | edit | add a kind or change its rate; logged sessions keep their kcal |
 | `whoami` | read | acting user, household members (id, name), current zone, today, target in force, profile with the latest weigh-in, expenditure basis |
 | `get_profile` | read | one member's height, age, sex, activity factor, target and last weigh-in, so a body-weight calculation needs no asking |
 | `get_day(date?, user?)` | read | meals, weights, activities, totals, target, balance; `date` defaults to today on the user's clock |

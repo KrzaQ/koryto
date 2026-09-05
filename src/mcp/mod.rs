@@ -45,7 +45,9 @@ what zone and day they are on, and their target. A day runs from the person's da
 04:00) to the next, on the clock of wherever they are, so a 01:00 snack belongs to the evening before. \
 Weights are kilograms (\"82.4\"); kcal and protein grams are integers; durations are \"45m\", \"1h30\". \
 whoami carries the person's height, age, sex and last weigh-in, and get_profile has the same for anyone \
-in the household: read a body weight from there rather than asking for it. \
+in the household: read a body weight from there rather than asking for it. Sport kcal computes itself: \
+log_activity with a known kind and a duration works out the burn from the kind's MET rate and the \
+person's weight, so do not estimate it or ask, and pass kcal only when they give you one. \
 Logging a meal: search_foods first, because a saved food gives the same number every time; log a hit \
 with food and portions and no confirmation is needed. Otherwise estimate kcal and protein from the \
 description, show the person the description and both numbers, and call log_meal with confirmed=true \
@@ -142,6 +144,24 @@ fn local(instant: DateTime<Utc>, zone: &str) -> String {
 // ----- parameters ------------------------------------------------------------
 
 #[derive(Deserialize, schemars::JsonSchema)]
+pub struct ActivityKindsParam {
+    /// Fragment of a name or alias; empty lists them all
+    pub query: Option<String>,
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
+pub struct SetActivityKindParam {
+    /// The kind's name; an existing one is updated, a new one created
+    pub name: String,
+    /// Multiple of resting metabolism: "3.5" a walk, "6" a swim, "9" a run
+    pub met: String,
+    /// Other names it goes by, replacing the ones it has
+    pub aliases: Option<Vec<String>>,
+    /// What the rate assumes: "about 5 km/h, flat"
+    pub note: Option<String>,
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
 pub struct ForUserParam {
     /// A household member by name or email; default you
     pub for_user: Option<String>,
@@ -223,7 +243,7 @@ pub struct LogActivityParam {
     pub kind: String,
     /// "45", "45m", "1h", "1h30", "1:30"
     pub duration: String,
-    /// The number the person gives or agrees to; it is added to that day's expenditure
+    /// Only to override the rate: leave it out and a known kind computes it
     pub kcal: Option<i32>,
     pub note: Option<String>,
     /// RFC 3339 or YYYY-MM-DD HH:MM; default now
@@ -456,6 +476,8 @@ pub struct ActivityOut {
     pub duration: String,
     pub minutes: i32,
     pub kcal: Option<i32>,
+    /// "manual" when the number was given, "met" when the kind's rate filled it in
+    pub source: String,
     pub note: String,
     pub voided: bool,
 }
@@ -471,6 +493,7 @@ impl ActivityOut {
             duration: format_minutes(a.minutes),
             minutes: a.minutes,
             kcal: a.kcal,
+            source: a.source,
             note: a.note,
             voided: a.voided_at.is_some(),
         }
@@ -557,6 +580,18 @@ pub struct SummaryOut {
     /// Estimated daily expenditure as of the last day, and its basis
     pub expenditure: Estimate,
     pub rows: Vec<DayRowOut>,
+}
+
+#[derive(Serialize, schemars::JsonSchema)]
+pub struct ActivityKindOut {
+    pub id: i32,
+    pub name: String,
+    pub aliases: Vec<String>,
+    /// Multiple of resting metabolism
+    pub met: String,
+    pub note: String,
+    /// Sessions logged at this rate
+    pub uses: i64,
 }
 
 #[derive(Serialize, schemars::JsonSchema)]
@@ -873,6 +908,100 @@ impl KorytoMcp {
     }
 
     #[tool(
+        description = "The known kinds of sport and their MET rates, matching a name or alias fragment; empty query lists them all. A session logged under one of these names gets its kcal from the rate without anyone estimating."
+    )]
+    async fn list_activity_kinds(
+        &self,
+        Parameters(p): Parameters<ActivityKindsParam>,
+        Extension(parts): Extension<http::request::Parts>,
+    ) -> Result<Json<ListOut<ActivityKindOut>>, ErrorData> {
+        principal(&parts)?;
+        let kinds = self
+            .db()
+            .search_activity_kinds(p.query.as_deref().unwrap_or(""), false)
+            .await
+            .map_err(db_err)?;
+        let mut items = Vec::with_capacity(kinds.len());
+        for k in kinds {
+            let uses = self.db().activity_kind_uses(k.id).await.map_err(db_err)?;
+            items.push(ActivityKindOut {
+                id: k.id,
+                name: k.name,
+                aliases: k.aliases,
+                met: k.met.to_string(),
+                note: k.note,
+                uses,
+            });
+        }
+        Ok(Json(ListOut { items }))
+    }
+
+    #[tool(
+        description = "Set a kind of sport's MET rate, adding the kind if it is new. Use it when the person says a rate is wrong for them or names a sport nothing covers; sessions already logged keep the kcal they were given. Needs the edit scope."
+    )]
+    async fn set_activity_kind(
+        &self,
+        Parameters(p): Parameters<SetActivityKindParam>,
+        Extension(parts): Extension<http::request::Parts>,
+    ) -> Result<Json<ActivityKindOut>, ErrorData> {
+        require_edit(&parts)?;
+        let met: rust_decimal::Decimal = p
+            .met
+            .trim()
+            .replace(',', ".")
+            .parse()
+            .map_err(|_| ErrorData::invalid_params("met must be a number like 3.5", None))?;
+        if met < rust_decimal::Decimal::ONE || met > rust_decimal::Decimal::from(25) {
+            return Err(ErrorData::invalid_params(
+                "met must be between 1.0 and 25.0",
+                None,
+            ));
+        }
+        let aliases = p
+            .aliases
+            .map(|a| a.into_iter().map(|x| x.trim().to_lowercase()).collect());
+        let existing = self
+            .db()
+            .find_activity_kind(&p.name)
+            .await
+            .map_err(db_err)?;
+        let k = match existing {
+            Some(k) => self
+                .db()
+                .update_activity_kind(
+                    k.id,
+                    crate::db::ActivityKindPatch {
+                        name: None,
+                        aliases,
+                        met: Some(met),
+                        note: p.note,
+                    },
+                )
+                .await
+                .map_err(db_err)?,
+            None => self
+                .db()
+                .insert_activity_kind(crate::db::NewActivityKind {
+                    name: p.name,
+                    aliases: aliases.unwrap_or_default(),
+                    met,
+                    note: p.note.unwrap_or_default(),
+                })
+                .await
+                .map_err(db_err)?,
+        };
+        let uses = self.db().activity_kind_uses(k.id).await.map_err(db_err)?;
+        Ok(Json(ActivityKindOut {
+            id: k.id,
+            name: k.name,
+            aliases: k.aliases,
+            met: k.met.to_string(),
+            note: k.note,
+            uses,
+        }))
+    }
+
+    #[tool(
         description = "Save a food for the household so it always gets the same number: a name, what one portion is, kcal and protein per portion. Show the person all of it and pass confirmed=true only after they agree. Needs the write scope."
     )]
     async fn add_food(
@@ -1020,7 +1149,7 @@ impl KorytoMcp {
     }
 
     #[tool(
-        description = "Record sport: a kind and a duration, now unless started_at is given. kcal, when the person gives it or agrees to an estimate, is added to that day's expenditure and so to what they may eat. Needs the write scope."
+        description = "Record sport: a kind and a duration, now unless started_at is given. Leave kcal out and a known kind fills it in from its MET rate and the person's weight, which is the better number; pass kcal only to override that or when the kind is unknown. It is added to that day's expenditure and so to what they may eat. Needs the write scope."
     )]
     async fn log_activity(
         &self,

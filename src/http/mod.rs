@@ -65,9 +65,9 @@ pub fn cookie_key(secret: &[u8]) -> Key {
 #[openapi(
     info(title = "koryto", description = "Calorie and weight log for a household"),
     tags(
-        (name = "auth"), (name = "profile"), (name = "foods"), (name = "days"),
-        (name = "meals"), (name = "weights"), (name = "activities"), (name = "stats"),
-        (name = "tokens")
+        (name = "auth"), (name = "profile"), (name = "foods"), (name = "activity-kinds"),
+        (name = "days"), (name = "meals"), (name = "weights"), (name = "activities"),
+        (name = "stats"), (name = "tokens")
     )
 )]
 struct ApiDoc;

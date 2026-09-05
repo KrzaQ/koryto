@@ -8,7 +8,8 @@ use utoipa::ToSchema;
 
 use crate::app::day::{DayRow, DayView, Totals};
 use crate::db::{
-    Activity, Food, FoodWithUsage, Household, Meal, Target, User, UserLocation, Weight,
+    Activity, ActivityKind, Food, FoodWithUsage, Household, Meal, Target, User, UserLocation,
+    Weight,
 };
 use crate::domain::duration::format_minutes;
 use crate::domain::expenditure::Estimate;
@@ -175,6 +176,54 @@ pub struct TargetPatchInput {
 }
 
 #[derive(Serialize, ToSchema)]
+pub struct ActivityKindDto {
+    pub id: i32,
+    pub name: String,
+    pub aliases: Vec<String>,
+    /// Multiple of resting metabolism; a session earns (met − 1) × kg × hours
+    #[schema(value_type = String)]
+    pub met: Decimal,
+    pub note: String,
+    #[schema(value_type = Option<String>, format = DateTime)]
+    pub archived_at: Option<DateTime<Utc>>,
+    /// Non-voided sessions whose kcal came from this rate
+    pub uses: i64,
+}
+
+impl ActivityKindDto {
+    pub fn from(k: ActivityKind, uses: i64) -> Self {
+        Self {
+            id: k.id,
+            name: k.name,
+            aliases: k.aliases,
+            met: k.met,
+            note: k.note,
+            archived_at: k.archived_at,
+            uses,
+        }
+    }
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct ActivityKindInput {
+    pub name: String,
+    #[serde(default)]
+    pub aliases: Vec<String>,
+    /// "3.5"; 1.0 is lying still, 3.5 a walk, 9 a run
+    pub met: String,
+    #[serde(default)]
+    pub note: String,
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct ActivityKindPatchInput {
+    pub name: Option<String>,
+    pub aliases: Option<Vec<String>>,
+    pub met: Option<String>,
+    pub note: Option<String>,
+}
+
+#[derive(Serialize, ToSchema)]
 pub struct FoodDto {
     pub id: i32,
     pub name: String,
@@ -328,6 +377,9 @@ pub struct ActivityDto {
     /// 45m, 1h, 1h30
     pub duration: String,
     pub kcal: Option<i32>,
+    /// "manual" when the number was given, "met" when the kind's rate filled it in
+    pub source: String,
+    pub activity_kind_id: Option<i32>,
     pub note: String,
     pub created_by: i32,
     pub created_via: String,
@@ -347,6 +399,8 @@ impl From<Activity> for ActivityDto {
             minutes: a.minutes,
             duration: format_minutes(a.minutes),
             kcal: a.kcal,
+            source: a.source,
+            activity_kind_id: a.activity_kind_id,
             note: a.note,
             created_by: a.created_by,
             created_via: a.created_via,
