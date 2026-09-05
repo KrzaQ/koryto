@@ -250,6 +250,7 @@ async fn lists_tools_and_reads_data() {
             "add_food",
             "archive_food",
             "get_day",
+            "get_profile",
             "get_summary",
             "log_activity",
             "log_meal",
@@ -277,6 +278,9 @@ async fn lists_tools_and_reads_data() {
     assert_eq!(me["members"].as_array().unwrap().len(), 2);
     assert_eq!(me["timezone"], "Europe/Warsaw");
     assert_eq!(me["expenditure"]["basis"], "none");
+    // The profile travels with whoami: no weigh-in yet, so the body is blank.
+    assert_eq!(me["profile"]["activity_factor"], "1.20");
+    assert!(me["profile"]["weight_kg"].is_null());
     assert_eq!(me["scopes"], json!(["read"]));
 
     let foods = structured(&c.call("search_foods", json!({"query": "DAL"})).await);
@@ -368,6 +372,15 @@ async fn logs_for_two_people_confirms_estimates_and_voids() {
     );
     assert_eq!(w["weight_kg"], "82.4");
     assert_eq!(w["day"], "2026-09-04");
+    // The weigh-in is now the profile's answer to "what do they weigh",
+    // for the person themselves and for anyone in the household.
+    let mine = structured(&c.call("get_profile", json!({})).await);
+    assert_eq!(mine["weight_kg"], "82.4");
+    assert_eq!(mine["weight_day"], "2026-09-04");
+    assert_eq!(mine["trend_kg"], "82.4");
+    let hers = structured(&c.call("get_profile", json!({"for_user": "bob"})).await);
+    assert_eq!(hers["user"], "Bob");
+    assert!(hers["weight_kg"].is_null());
     let a = structured(
         &c.call(
             "log_activity",

@@ -31,6 +31,20 @@ fn window_rows(rows: &[DayRow]) -> Vec<expenditure::DayRow> {
         .collect()
 }
 
+/// The most recent weigh-in up to `on`: its day, the reading and the trend
+/// there. None when the person has never weighed themselves.
+pub async fn latest_weight(
+    db: &Db,
+    user: &User,
+    on: NaiveDate,
+) -> AppResult<Option<(NaiveDate, i32, i32)>> {
+    Ok(day::trend_up_to(db, user, on)
+        .await?
+        .iter()
+        .next_back()
+        .map(|(d, (w, t))| (*d, *w, *t)))
+}
+
 /// The estimate as of `end`, over the window ending there, with `end`'s
 /// sport on top of the base.
 pub async fn expenditure_on(db: &Db, user: &User, end: NaiveDate) -> AppResult<Estimate> {

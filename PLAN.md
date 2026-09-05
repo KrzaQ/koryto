@@ -390,7 +390,8 @@ kilograms. Tools:
 
 | Tool | Scope | Notes |
 |---|---|---|
-| `whoami` | read | acting user, household members (id, name), current zone, today, target in force, expenditure basis |
+| `whoami` | read | acting user, household members (id, name), current zone, today, target in force, profile with the latest weigh-in, expenditure basis |
+| `get_profile` | read | one member's height, age, sex, activity factor, target and last weigh-in, so a body-weight calculation needs no asking |
 | `get_day(date?, user?)` | read | meals, weights, activities, totals, target, balance; `date` defaults to today on the user's clock |
 | `get_summary(from, to, user?)` | read | per-day rows plus averages, trend weight, expenditure with basis, logged-day count |
 | `search_foods(query)` | read | name and alias match, ranked; empty query lists the most used |

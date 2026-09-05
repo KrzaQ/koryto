@@ -169,7 +169,7 @@ pub fn seed(profile: &Profile, weight_g: Option<i32>, on: NaiveDate) -> Option<i
         .map(|k| k.max(0))
 }
 
-fn years_between(born: NaiveDate, on: NaiveDate) -> i64 {
+pub fn years_between(born: NaiveDate, on: NaiveDate) -> i64 {
     use chrono::Datelike;
     let mut years = i64::from(on.year() - born.year());
     if (on.month(), on.day()) < (born.month(), born.day()) {

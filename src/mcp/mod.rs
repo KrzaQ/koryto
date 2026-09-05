@@ -44,6 +44,8 @@ person and can see and log for everyone in their household; call whoami first to
 what zone and day they are on, and their target. A day runs from the person's day boundary (default \
 04:00) to the next, on the clock of wherever they are, so a 01:00 snack belongs to the evening before. \
 Weights are kilograms (\"82.4\"); kcal and protein grams are integers; durations are \"45m\", \"1h30\". \
+whoami carries the person's height, age, sex and last weigh-in, and get_profile has the same for anyone \
+in the household: read a body weight from there rather than asking for it. \
 Logging a meal: search_foods first, because a saved food gives the same number every time; log a hit \
 with food and portions and no confirmation is needed. Otherwise estimate kcal and protein from the \
 description, show the person the description and both numbers, and call log_meal with confirmed=true \
@@ -138,6 +140,12 @@ fn local(instant: DateTime<Utc>, zone: &str) -> String {
 }
 
 // ----- parameters ------------------------------------------------------------
+
+#[derive(Deserialize, schemars::JsonSchema)]
+pub struct ForUserParam {
+    /// A household member by name or email; default you
+    pub for_user: Option<String>,
+}
 
 #[derive(Deserialize, schemars::JsonSchema)]
 pub struct DayParam {
@@ -340,6 +348,28 @@ impl From<crate::db::Target> for TargetOut {
     }
 }
 
+/// The body behind the numbers: what Mifflin-St Jeor is fed and the last
+/// time the person stood on a scale.
+#[derive(Serialize, schemars::JsonSchema)]
+pub struct ProfileOut {
+    pub user: String,
+    pub height_cm: Option<i32>,
+    pub born_on: Option<String>,
+    /// Years, as of today on their clock
+    pub age: Option<i64>,
+    /// "female" or "male"
+    pub sex: Option<String>,
+    /// The Mifflin multiplier for everything but logged sport
+    pub activity_factor: String,
+    /// The most recent weigh-in, however old
+    pub weight_kg: Option<String>,
+    /// The day that reading was taken
+    pub weight_day: Option<String>,
+    /// The smoothed weight on that day: the number to use for a body estimate
+    pub trend_kg: Option<String>,
+    pub target: Option<TargetOut>,
+}
+
 #[derive(Serialize, schemars::JsonSchema)]
 pub struct WhoamiOut {
     pub you: PersonOut,
@@ -352,6 +382,8 @@ pub struct WhoamiOut {
     /// The day starts this many minutes after midnight
     pub day_boundary_minutes: i32,
     pub target: Option<TargetOut>,
+    /// Height, age, sex, activity factor and the last weigh-in
+    pub profile: ProfileOut,
     /// Today's estimated expenditure and where the number comes from
     pub expenditure: Estimate,
     pub scopes: Vec<String>,
@@ -590,6 +622,32 @@ impl KorytoMcp {
         &self.state.db
     }
 
+    async fn profile_out(&self, user: &User, today: NaiveDate) -> Result<ProfileOut, ErrorData> {
+        let weight = stats::latest_weight(self.db(), user, today)
+            .await
+            .map_err(app_err)?;
+        let target = self
+            .db()
+            .target_for(user.id, today)
+            .await
+            .map_err(db_err)?
+            .map(TargetOut::from);
+        Ok(ProfileOut {
+            user: user.display().to_string(),
+            height_cm: user.height_mm.map(|mm| mm / 10),
+            born_on: user.born_on.map(|d| d.to_string()),
+            age: user
+                .born_on
+                .map(|b| crate::domain::expenditure::years_between(b, today)),
+            sex: user.sex.clone(),
+            activity_factor: user.activity_factor.to_string(),
+            weight_kg: weight.map(|(_, w, _)| format_kg(w)),
+            weight_day: weight.map(|(d, _, _)| d.to_string()),
+            trend_kg: weight.map(|(_, _, t)| format_kg(t)),
+            target,
+        })
+    }
+
     async fn member(&self, actor: &User, who: Option<&str>) -> Result<User, ErrorData> {
         match who.map(str::trim).filter(|w| !w.is_empty()) {
             None => scope::member(self.db(), actor, None).await.map_err(app_err),
@@ -661,7 +719,7 @@ impl KorytoMcp {
     }
 
     #[tool(
-        description = "Who you are acting as, the household members you can see and log for, the zone and day you are on, the target in force and today's expenditure estimate. Call it first."
+        description = "Who you are acting as, the household members you can see and log for, the zone and day you are on, the target in force, your profile with the latest weigh-in, and today's expenditure estimate. Call it first."
     )]
     async fn whoami(
         &self,
@@ -690,6 +748,7 @@ impl KorytoMcp {
             .await
             .map_err(db_err)?
             .map(TargetOut::from);
+        let profile = self.profile_out(user, today).await?;
         let expenditure = stats::expenditure_on(self.db(), user, today)
             .await
             .map_err(app_err)?;
@@ -701,9 +760,25 @@ impl KorytoMcp {
             today: today.to_string(),
             day_boundary_minutes: user.day_boundary_minutes,
             target,
+            profile,
             expenditure,
             scopes: p.scopes(),
         }))
+    }
+
+    #[tool(
+        description = "One person's height, age, sex, activity factor, target and latest weigh-in, however old that reading is. Use it when a calculation needs their body weight; default you."
+    )]
+    async fn get_profile(
+        &self,
+        Parameters(p): Parameters<ForUserParam>,
+        Extension(parts): Extension<http::request::Parts>,
+    ) -> Result<Json<ProfileOut>, ErrorData> {
+        let principal = principal(&parts)?;
+        let user = self.member(principal.user(), p.for_user.as_deref()).await?;
+        let tz = time::current_zone(self.db(), &user).await.map_err(db_err)?;
+        let today = day::today(tz, user.day_boundary_minutes);
+        Ok(Json(self.profile_out(&user, today).await?))
     }
 
     #[tool(
