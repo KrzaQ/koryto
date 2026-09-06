@@ -92,10 +92,11 @@ function ledger(d: DayDto): { food: Line; tail: Line[] } {
     <p v-if="error" class="note-danger">{{ error }}</p>
 
     <div v-if="days.length" class="grid gap-4 md:grid-cols-3" data-testid="home-tiles">
-      <div
+      <RouterLink
         v-for="(d, i) in days"
         :key="d.day"
-        class="card p-4"
+        :to="`/d/${d.day}`"
+        class="card block p-4 hover:border-accent"
         :data-testid="i === 0 ? 'tile-today' : 'tile-yesterday'"
       >
         <div class="text-xs tracking-wide text-muted uppercase">
@@ -111,7 +112,6 @@ function ledger(d: DayDto): { food: Line; tail: Line[] } {
             <span class="text-sm text-muted">kcal {{ rooms[i]!.kcal < 0 ? 'over' : 'left' }}</span>
           </template>
           <span v-else class="text-3xl font-semibold tabular-nums">—</span>
-          <RouterLink :to="`/d/${d.day}`" class="link ml-auto text-xs">open</RouterLink>
         </div>
         <div class="mt-2 text-xs text-muted tabular-nums">
           {{ d.totals.kcal }} eaten
@@ -121,16 +121,15 @@ function ledger(d: DayDto): { food: Line; tail: Line[] } {
           <template v-if="d.totals.sport_kcal"> · {{ d.totals.sport_kcal }} sport</template>
           <template v-if="d.totals.protein_g"> · {{ d.totals.protein_g }} g protein</template>
         </div>
-      </div>
+      </RouterLink>
 
-      <div class="card p-4" data-testid="tile-weight">
+      <RouterLink to="/trends" class="card block p-4 hover:border-accent" data-testid="tile-weight">
         <div class="text-xs tracking-wide text-muted uppercase">Weight</div>
         <div class="mt-1 flex items-baseline gap-2">
           <span class="text-3xl font-semibold tabular-nums">{{
             last ? formatKg(last.weight_g) : '—'
           }}</span>
           <span v-if="last" class="text-sm text-muted">kg</span>
-          <RouterLink :to="`/d/${today}`" class="link ml-auto text-xs">weigh in</RouterLink>
         </div>
         <div class="mt-2 text-xs text-muted tabular-nums">
           <template v-if="last"
@@ -141,7 +140,7 @@ function ledger(d: DayDto): { food: Line; tail: Line[] } {
           >
           <template v-else>No weigh-in in the last 30 days.</template>
         </div>
-      </div>
+      </RouterLink>
     </div>
 
     <div v-if="days.length" class="grid gap-4 md:grid-cols-2">
