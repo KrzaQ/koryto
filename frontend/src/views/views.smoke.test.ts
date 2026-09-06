@@ -467,6 +467,11 @@ describe('views', () => {
     expect(w.find('[data-testid="tile-today"]').text()).toContain('kcal left')
     expect(w.find('[data-testid="tile-today"]').text()).toContain('2818 burnt')
     expect(w.find('[data-testid="tile-yesterday"]').exists()).toBe(true)
+    // The week's mean room per logged day: the mock says intake is 400 under
+    // the burn.
+    expect(w.find('[data-testid="tile-week"]').text()).toContain('400')
+    expect(w.find('[data-testid="tile-week"]').text()).toContain('kcal/day under')
+    expect(w.find('[data-testid="tile-week"]').text()).toContain('5/7 logged')
     expect(w.find('[data-testid="tile-weight"]').text()).toContain('82.4')
     expect(w.find('[data-testid="log-today"]').text()).toContain('Lentil curry')
     // The ledger adds up to the tile: −1200 food, +600 sport, +2218 base.

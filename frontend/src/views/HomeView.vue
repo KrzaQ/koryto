@@ -7,7 +7,7 @@ import { ApiError, api } from '@/api/client'
 import type { DayDto, Summary, WeightStats } from '@/api/types'
 import BudgetChart from '@/components/BudgetChart.vue'
 import { dayLabel, shiftDay } from '@/lib/day'
-import { roomOf } from '@/lib/budget'
+import { roomOf, weekRoomOf } from '@/lib/budget'
 import { formatDateTime } from '@/lib/time'
 import { formatKg, formatMinutes, signed } from '@/lib/units'
 import { usePerson } from '@/stores/person'
@@ -46,6 +46,7 @@ watch(() => [person.id, today.value], load)
 onMounted(load)
 
 const rooms = computed(() => days.value.map(roomOf))
+const weekRoom = computed(() => weekRoomOf(week.value))
 const last = computed(() => weight.value?.points[weight.value.points.length - 1] ?? null)
 const weighedAgo = computed(() => {
   if (!last.value) return null
@@ -91,7 +92,11 @@ function ledger(d: DayDto): { food: Line; tail: Line[] } {
     <p v-if="!person.isMe" class="chip" data-testid="person-note">{{ person.name }}</p>
     <p v-if="error" class="note-danger">{{ error }}</p>
 
-    <div v-if="days.length" class="grid gap-4 md:grid-cols-3" data-testid="home-tiles">
+    <div
+      v-if="days.length"
+      class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
+      data-testid="home-tiles"
+    >
       <RouterLink
         v-for="(d, i) in days"
         :key="d.day"
@@ -120,6 +125,33 @@ function ledger(d: DayDto): { food: Line; tail: Line[] } {
           </template>
           <template v-if="d.totals.sport_kcal"> · {{ d.totals.sport_kcal }} sport</template>
           <template v-if="d.totals.protein_g"> · {{ d.totals.protein_g }} g protein</template>
+        </div>
+      </RouterLink>
+
+      <RouterLink to="/trends" class="card block p-4 hover:border-accent" data-testid="tile-week">
+        <div class="text-xs tracking-wide text-muted uppercase">Last 7 days</div>
+        <div class="mt-1 flex items-baseline gap-2">
+          <template v-if="weekRoom">
+            <span
+              class="text-3xl font-semibold tabular-nums"
+              :class="weekRoom.kcal < 0 ? 'text-danger' : 'text-ok'"
+              >{{ Math.abs(weekRoom.kcal) }}</span
+            >
+            <span class="text-sm text-muted"
+              >kcal/day {{ weekRoom.kcal < 0 ? 'over' : 'under' }}</span
+            >
+          </template>
+          <span v-else class="text-3xl font-semibold tabular-nums">—</span>
+        </div>
+        <div class="mt-2 text-xs text-muted tabular-nums">
+          <template v-if="week && weekRoom">
+            vs {{ weekRoom.kind }} · {{ week.logged_days }}/7 logged<template
+              v-if="week.mean_kcal != null"
+            >
+              · {{ week.mean_kcal }} eaten/day</template
+            >
+          </template>
+          <template v-else>Nothing logged in the last week.</template>
         </div>
       </RouterLink>
 

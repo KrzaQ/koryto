@@ -4,7 +4,7 @@
 // the day's sport) when an estimate exists, else against the target.
 import { computed } from 'vue'
 import type { DayDto, Summary } from '@/api/types'
-import { roomOf } from '@/lib/budget'
+import { roomOf, weekRoomOf } from '@/lib/budget'
 import { formatMinutes, signed } from '@/lib/units'
 
 const props = defineProps<{ day: DayDto; week: Summary | null; isToday: boolean }>()
@@ -22,14 +22,7 @@ const pct = computed(() =>
 )
 const vsTarget = computed(() => (target.value !== null ? target.value - eaten.value : null))
 
-const weekRoom = computed(() => {
-  const w = props.week
-  if (!w) return null
-  if (w.mean_balance_vs_expenditure != null)
-    return { kind: 'burn' as const, kcal: -w.mean_balance_vs_expenditure }
-  if (w.mean_balance != null) return { kind: 'target' as const, kcal: -w.mean_balance }
-  return null
-})
+const weekRoom = computed(() => weekRoomOf(props.week))
 </script>
 
 <template>
