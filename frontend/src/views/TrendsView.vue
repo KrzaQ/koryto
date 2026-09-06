@@ -47,7 +47,7 @@ const person = usePerson()
 const theme = useTheme()
 const ink = computed(() => chartInk(theme.resolved))
 
-const to = ref(session.me?.today ?? new Date().toISOString().slice(0, 10))
+const to = ref(session.today)
 const weeks = ref(13)
 const from = computed(() => shiftDay(to.value, -(weeks.value * 7 - 1)))
 const balanceMode = ref<'expenditure' | 'target'>('expenditure')

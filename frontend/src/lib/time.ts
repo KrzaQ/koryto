@@ -88,6 +88,16 @@ export function fromLocalInput(value: string, zone: string): string {
   return new Date(guess).toISOString().slice(0, 19) + 'Z'
 }
 
+/**
+ * The accounting day an instant falls in for someone on `zone` whose day
+ * starts `boundaryMinutes` after midnight: the server's rule, so a browser
+ * left open past midnight does not have to ask what today is.
+ */
+export function dayIn(zone: string, boundaryMinutes = 0, at: Date = new Date()): string {
+  const p = partsIn(new Date(at.getTime() - boundaryMinutes * 60_000), zone)
+  return `${p.y}-${pad(p.m)}-${pad(p.d)}`
+}
+
 /** Short zone name at an instant, e.g. "CEST", "BST", "GMT+3". */
 export function zoneAbbr(zone: string, at = new Date()): string {
   try {

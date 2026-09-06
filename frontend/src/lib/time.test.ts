@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { formatDateTime, fromLocalInput, nowLocal, toLocalInput, zoneAbbr, zoneCity } from './time'
+import {
+  dayIn,
+  formatDateTime,
+  fromLocalInput,
+  nowLocal,
+  toLocalInput,
+  zoneAbbr,
+  zoneCity,
+} from './time'
 
 describe('time', () => {
   it('shows an instant on the chosen clock', () => {
@@ -27,5 +35,19 @@ describe('time', () => {
     expect(zoneAbbr('Europe/Warsaw', new Date(Date.UTC(2026, 7, 1)))).toBe('CEST')
     expect(zoneCity('Europe/Warsaw')).toBe('Warsaw')
     expect(zoneCity('America/New_York')).toBe('New York')
+  })
+})
+
+describe('dayIn', () => {
+  it('follows the zone and the day boundary, not UTC', () => {
+    // 01:30 in Warsaw on the 5th, with the day starting at 04:00, is the 4th.
+    expect(dayIn('Europe/Warsaw', 240, new Date('2026-09-04T23:30:00Z'))).toBe('2026-09-04')
+    // 04:00 sharp is the new day; 03:59 is not.
+    expect(dayIn('Europe/Warsaw', 240, new Date('2026-09-05T02:00:00Z'))).toBe('2026-09-05')
+    expect(dayIn('Europe/Warsaw', 240, new Date('2026-09-05T01:59:00Z'))).toBe('2026-09-04')
+    // The same instant is a different day on the other side of the world.
+    expect(dayIn('Pacific/Auckland', 240, new Date('2026-09-04T23:30:00Z'))).toBe('2026-09-05')
+    // Without a boundary it is just the date on that clock.
+    expect(dayIn('UTC', 0, new Date('2026-09-04T23:30:00Z'))).toBe('2026-09-04')
   })
 })

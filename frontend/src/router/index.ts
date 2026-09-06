@@ -43,8 +43,8 @@ router.beforeEach(async (to) => {
   // which does not run when only the :day parameter changes.
   if (to.name === 'day') {
     const d = String(to.params.day)
-    if (d === 'today') return `/d/${session.me.today}`
-    if (!isDay(d)) return `/d/${session.me.today}`
+    if (d === 'today') return `/d/${session.today}`
+    if (!isDay(d)) return `/d/${session.today}`
   }
   return true
 })

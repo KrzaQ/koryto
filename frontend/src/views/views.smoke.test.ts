@@ -429,6 +429,10 @@ function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respon
 describe('views', () => {
   let errors: unknown[][]
   beforeEach(async () => {
+    // The views ask the clock what today is, so pin it: 14:00 in Warsaw on
+    // the 4th, which with a 04:00 boundary is the 4th.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-09-04T12:00:00Z'))
     setActivePinia(createPinia())
     vi.stubGlobal('fetch', vi.fn(fakeFetch))
     calls.length = 0
@@ -438,6 +442,7 @@ describe('views', () => {
     await useSession().load()
   })
   afterEach(() => {
+    vi.useRealTimers()
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
   })

@@ -102,7 +102,7 @@ async function saveProfile() {
 const targetForm = reactive({ open: false, valid_from: '', kcal: '', protein_g: '', weight_kg: '' })
 function openTarget() {
   targetForm.open = true
-  targetForm.valid_from = session.me?.today ?? ''
+  targetForm.valid_from = session.today
 }
 const targetValid = computed(
   () =>

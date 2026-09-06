@@ -40,7 +40,7 @@ const adding = ref(false)
 const members = computed(() =>
   session.members.map((m) => ({ id: m.id, name: m.name ?? m.email ?? `#${m.id}` })),
 )
-const isToday = computed(() => props.day === session.me?.today)
+const isToday = computed(() => props.day === session.today)
 const zoneNote = computed(() => {
   const zones = new Set((data.value?.meals ?? []).map((m) => m.timezone))
   const mine = session.me?.timezone
@@ -208,11 +208,7 @@ onMounted(load)
     <template v-if="data">
       <DayHeader :day="data" :week="week" :is-today="isToday" />
 
-      <BudgetChart
-        v-if="week && week.logged_days > 0"
-        :week="week"
-        :today="session.me?.today ?? ''"
-      />
+      <BudgetChart v-if="week && week.logged_days > 0" :week="week" :today="session.today" />
 
       <section class="card overflow-x-auto">
         <table class="w-full text-sm">

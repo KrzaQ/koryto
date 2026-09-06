@@ -18,7 +18,7 @@ const session = useSession()
 const person = usePerson()
 const tz = useTimezone()
 
-const today = computed(() => session.me?.today ?? new Date().toISOString().slice(0, 10))
+const today = computed(() => session.today)
 const yesterday = computed(() => shiftDay(today.value, -1))
 
 const days = ref<DayDto[]>([])
