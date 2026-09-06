@@ -349,8 +349,8 @@ function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respon
   if (path === '/api/stats/summary')
     return Promise.resolve(
       json({
-        from: '2026-08-29',
-        to: '2026-09-04',
+        from: url.includes('to=2026-09-03') ? '2026-08-28' : '2026-08-29',
+        to: url.includes('to=2026-09-03') ? '2026-09-03' : '2026-09-04',
         days: 7,
         logged_days: 5,
         mean_kcal: 1900,
@@ -467,11 +467,22 @@ describe('views', () => {
     expect(w.find('[data-testid="tile-today"]').text()).toContain('kcal left')
     expect(w.find('[data-testid="tile-today"]').text()).toContain('2818 burnt')
     expect(w.find('[data-testid="tile-yesterday"]').exists()).toBe(true)
-    // The week's mean room per logged day: the mock says intake is 400 under
-    // the burn.
+    // The week's mean room per logged day, over the seven days before today:
+    // the mock says intake is 400 under the burn.
     expect(w.find('[data-testid="tile-week"]').text()).toContain('400')
     expect(w.find('[data-testid="tile-week"]').text()).toContain('kcal/day under')
     expect(w.find('[data-testid="tile-week"]').text()).toContain('5/7 logged')
+    // The average's week stops the day before today; the chart's does not.
+    expect(
+      calls.some((c) =>
+        c.startsWith('GET /api/stats/summary?user=1&from=2026-08-28&to=2026-09-03'),
+      ),
+    ).toBe(true)
+    expect(
+      calls.some((c) =>
+        c.startsWith('GET /api/stats/summary?user=1&from=2026-08-29&to=2026-09-04'),
+      ),
+    ).toBe(true)
     expect(w.find('[data-testid="tile-weight"]').text()).toContain('82.4')
     expect(w.find('[data-testid="log-today"]').text()).toContain('Lentil curry')
     // The ledger adds up to the tile: −1200 food, +600 sport, +2218 base.

@@ -29,8 +29,10 @@ const person = usePerson()
 const tz = useTimezone()
 
 const data = ref<DayDto | null>(null)
-// The six days before this one and this one: the week card and the chart.
+// The chart's week ends on the day shown; the average's week ends the day
+// before it, because a day still being eaten is not an average of anything.
 const week = ref<Summary | null>(null)
+const previous = ref<Summary | null>(null)
 const error = ref<string | null>(null)
 const busy = ref(false)
 const showVoided = ref(false)
@@ -52,14 +54,18 @@ async function load() {
   error.value = null
   try {
     // The week is context: if it fails the day still shows.
-    const [day, summary] = await Promise.all([
+    const [day, summary, before] = await Promise.all([
       api.day(person.id, props.day, showVoided.value),
       api.stats
         .summary({ user: person.id, from: shiftDay(props.day, -6), to: props.day })
         .catch(() => null),
+      api.stats
+        .summary({ user: person.id, from: shiftDay(props.day, -7), to: shiftDay(props.day, -1) })
+        .catch(() => null),
     ])
     data.value = day
     week.value = summary
+    previous.value = before
   } catch (e) {
     error.value = e instanceof ApiError ? e.message : String(e)
   }
@@ -206,7 +212,7 @@ onMounted(load)
     <p v-if="error" class="note-danger" data-testid="error">{{ error }}</p>
 
     <template v-if="data">
-      <DayHeader :day="data" :week="week" :is-today="isToday" />
+      <DayHeader :day="data" :week="previous" :is-today="isToday" />
 
       <BudgetChart v-if="week && week.logged_days > 0" :week="week" :today="session.today" />
 

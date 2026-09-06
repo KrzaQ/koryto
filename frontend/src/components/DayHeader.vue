@@ -78,9 +78,7 @@ const weekRoom = computed(() => weekRoomOf(props.week))
       </div>
     </div>
     <div class="card p-4" data-testid="week-card">
-      <div class="text-xs tracking-wide text-muted uppercase">
-        {{ isToday ? 'Last 7 days' : 'The 7 days to it' }}
-      </div>
+      <div class="text-xs tracking-wide text-muted uppercase">Previous 7 days</div>
       <div class="mt-1 flex items-baseline gap-2">
         <template v-if="weekRoom">
           <span
@@ -101,7 +99,7 @@ const weekRoom = computed(() => weekRoomOf(props.week))
             · {{ week.mean_kcal }} eaten/day</template
           ><template v-if="week.sport_kcal"> · {{ week.sport_kcal }} sport</template>
         </template>
-        <template v-else>Nothing logged in the last week.</template>
+        <template v-else>Nothing logged in the week before.</template>
       </div>
     </div>
     <div class="card p-4">

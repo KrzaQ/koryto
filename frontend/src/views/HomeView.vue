@@ -23,21 +23,26 @@ const yesterday = computed(() => shiftDay(today.value, -1))
 
 const days = ref<DayDto[]>([])
 const weight = ref<WeightStats | null>(null)
+// The chart's week ends today; the average's week ends yesterday, because a
+// day still being eaten is not an average of anything.
 const week = ref<Summary | null>(null)
+const previous = ref<Summary | null>(null)
 const error = ref<string | null>(null)
 
 async function load() {
   error.value = null
   try {
-    const [t, y, w, s] = await Promise.all([
+    const [t, y, w, s, p] = await Promise.all([
       api.day(person.id, today.value),
       api.day(person.id, yesterday.value),
       api.stats.weight({ user: person.id, from: shiftDay(today.value, -30), to: today.value }),
       api.stats.summary({ user: person.id, from: shiftDay(today.value, -6), to: today.value }),
+      api.stats.summary({ user: person.id, from: shiftDay(today.value, -7), to: yesterday.value }),
     ])
     days.value = [t, y]
     weight.value = w
     week.value = s
+    previous.value = p
   } catch (e) {
     error.value = e instanceof ApiError ? e.message : String(e)
   }
@@ -46,7 +51,7 @@ watch(() => [person.id, today.value], load)
 onMounted(load)
 
 const rooms = computed(() => days.value.map(roomOf))
-const weekRoom = computed(() => weekRoomOf(week.value))
+const weekRoom = computed(() => weekRoomOf(previous.value))
 const last = computed(() => weight.value?.points[weight.value.points.length - 1] ?? null)
 const weighedAgo = computed(() => {
   if (!last.value) return null
@@ -129,7 +134,7 @@ function ledger(d: DayDto): { food: Line; tail: Line[] } {
       </RouterLink>
 
       <RouterLink to="/trends" class="card block p-4 hover:border-accent" data-testid="tile-week">
-        <div class="text-xs tracking-wide text-muted uppercase">Last 7 days</div>
+        <div class="text-xs tracking-wide text-muted uppercase">Previous 7 days</div>
         <div class="mt-1 flex items-baseline gap-2">
           <template v-if="weekRoom">
             <span
@@ -144,14 +149,14 @@ function ledger(d: DayDto): { food: Line; tail: Line[] } {
           <span v-else class="text-3xl font-semibold tabular-nums">—</span>
         </div>
         <div class="mt-2 text-xs text-muted tabular-nums">
-          <template v-if="week && weekRoom">
-            vs {{ weekRoom.kind }} · {{ week.logged_days }}/7 logged<template
-              v-if="week.mean_kcal != null"
+          <template v-if="previous && weekRoom">
+            vs {{ weekRoom.kind }} · {{ previous.logged_days }}/7 logged<template
+              v-if="previous.mean_kcal != null"
             >
-              · {{ week.mean_kcal }} eaten/day</template
+              · {{ previous.mean_kcal }} eaten/day</template
             >
           </template>
-          <template v-else>Nothing logged in the last week.</template>
+          <template v-else>Nothing logged in the week before today.</template>
         </div>
       </RouterLink>
 
