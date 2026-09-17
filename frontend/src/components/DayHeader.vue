@@ -57,8 +57,8 @@ const weekRoom = computed(() => weekRoomOf(props.week))
       </div>
       <div class="mt-2 text-xs text-muted tabular-nums" data-testid="budget-note">
         <template v-if="against?.kind === 'burn'">
-          {{ burnKcal }} burnt = {{ burn.base_kcal }} base<template v-if="burn.sport_kcal">
-            + {{ burn.sport_kcal }} sport</template
+          {{ burnKcal }} burnt<template v-if="burn.sport_kcal">
+            = {{ burn.base_kcal }} base + {{ burn.sport_kcal }} sport</template
           >
         </template>
         <template v-if="vsTarget !== null">
@@ -68,8 +68,14 @@ const weekRoom = computed(() => weekRoomOf(props.week))
           >
         </template>
         <div v-if="burn.basis === 'seed'" class="mt-1">
-          Seed estimate: {{ burn.logged_days }}/14 logged days, {{ burn.weight_span_days }}/10
-          weigh-in days.
+          Seed estimate · {{ Math.min(burn.logged_days, 14) }}/14 logged days ·
+          {{ Math.min(burn.weight_span_days, 10) }}/10 days of weigh-ins
+        </div>
+        <div v-else-if="burn.basis === 'adaptive' && burn.trust_pct < 100" class="mt-1">
+          Base {{ burn.trust_pct }}% from your data, the rest from the seed
+          <template v-if="burn.seed_kcal != null && burn.adaptive_kcal != null">
+            · seed {{ burn.seed_kcal }} · fit {{ burn.adaptive_kcal }}</template
+          >
         </div>
         <div v-else-if="burn.basis === 'none'" class="mt-1">
           No burn yet: needs a weigh-in and height, birth date and sex on the

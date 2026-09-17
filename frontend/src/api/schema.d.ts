@@ -796,6 +796,11 @@ export interface components {
     Estimate: {
       /**
        * Format: int32
+       * @description What the fit alone says for the base, once there are enough days for one.
+       */
+      adaptive_kcal?: number | null
+      /**
+       * Format: int32
        * @description What the body spends on a day without sport, by `basis`.
        */
       base_kcal?: number | null
@@ -805,10 +810,11 @@ export interface components {
        * @description The day's expenditure: `base_kcal` plus `sport_kcal`. None with basis `none`.
        */
       kcal?: number | null
+      /** @description Complete logged days before the day that the fit read */
       logged_days: number
       /**
        * Format: int32
-       * @description What the seed would say for the base, for the UI to show next to the adaptive number.
+       * @description What the seed says for the base.
        */
       seed_kcal?: number | null
       /**
@@ -816,6 +822,11 @@ export interface components {
        * @description The sport kcal logged on the day, added on top of the base.
        */
       sport_kcal: number
+      /**
+       * Format: int32
+       * @description How much of the base comes from the fit, 0 to 100; the seed gives the rest.
+       */
+      trust_pct: number
       /** Format: int64 */
       weight_span_days: number
     }

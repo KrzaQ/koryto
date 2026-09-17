@@ -144,6 +144,8 @@ const day = {
     logged_days: 3,
     weight_span_days: 2,
     seed_kcal: 2218,
+    adaptive_kcal: null,
+    trust_pct: 0,
   },
   balance_vs_expenditure: -1618,
 }
@@ -335,6 +337,8 @@ function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respon
           logged_days: 3,
           weight_span_days: 2,
           seed_kcal: 2218,
+          adaptive_kcal: null,
+          trust_pct: 0,
         },
         days: ['2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04'].map((day) => ({
           day,

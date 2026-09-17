@@ -451,15 +451,17 @@ onMounted(load)
         </div>
         <div class="mt-1 text-xs text-muted">
           <template v-if="latest?.basis === 'adaptive'"
-            >From {{ latest.logged_days }} logged days and the weight trend<span
-              v-if="latest.seed_kcal"
+            >{{ latest.trust_pct }}% from {{ latest.logged_days }} logged days<template
+              v-if="latest.seed_kcal != null"
             >
-              (seed would say {{ latest.seed_kcal }})</span
-            >.</template
+              · seed {{ latest.seed_kcal }}</template
+            ><template v-if="latest.adaptive_kcal != null">
+              · fit {{ latest.adaptive_kcal }}</template
+            ></template
           >
           <template v-else-if="latest?.basis === 'seed'"
-            >Mifflin-St Jeor seed; {{ latest.logged_days }} of 14 logged days and
-            {{ latest.weight_span_days }} of 10 weigh-in days so far.</template
+            >Mifflin-St Jeor seed · {{ Math.min(latest.logged_days, 14) }}/14 logged days ·
+            {{ Math.min(latest.weight_span_days, 10) }}/10 days of weigh-ins</template
           >
           <template v-else>Needs weigh-ins and a profile (height, birth date, sex).</template>
         </div>
@@ -515,9 +517,10 @@ onMounted(load)
     <section class="card p-4">
       <h2 class="text-sm font-medium tracking-wide text-muted uppercase">Expenditure</h2>
       <p class="text-xs text-muted">
-        The base is what the body burns on a day without sport, derived from intake, sport and the
-        weight trend over a 28-day window; dashed while the Mifflin-St Jeor seed stands in. The bars
-        are the sport kcal logged that day, which add to that day's burn.
+        The base is what the body burns on a day without sport. It starts at the Mifflin-St Jeor
+        seed (dashed) and moves to a fit of intake, sport and the scale over the 28 days before, as
+        the data fills in and your first six weeks pass. The bars are the sport kcal logged that
+        day, which add to that day's burn.
       </p>
       <div
         v-if="expenditure && expenditure.days.some((d) => d.kcal !== null && d.kcal !== undefined)"
@@ -528,9 +531,9 @@ onMounted(load)
       </div>
       <p v-else-if="expenditure" class="note-warn mt-2" data-testid="expenditure-empty">
         No estimate yet. The seed needs a weigh-in plus height, birth date and sex on the
-        <RouterLink to="/profile" class="link">profile</RouterLink>; the adaptive number needs 14
-        logged days and weigh-ins 10 days apart. Sport kcal add to the day's burn once there is a
-        base to add them to.
+        <RouterLink to="/profile" class="link">profile</RouterLink>. The fit needs 14 logged days
+        and weigh-ins 10 days apart. Sport kcal add to the day's burn once there is a base to add
+        them to.
       </p>
     </section>
 
