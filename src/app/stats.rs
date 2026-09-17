@@ -25,7 +25,7 @@ fn window_rows(rows: &[DayRow]) -> Vec<expenditure::DayRow> {
         .map(|r| expenditure::DayRow {
             day: r.day,
             kcal: r.kcal,
-            trend_g: r.trend_g,
+            weight_g: r.weight_g,
             sport_kcal: r.sport_kcal,
         })
         .collect()
@@ -45,21 +45,23 @@ pub async fn latest_weight(
         .map(|(d, (w, t))| (*d, *w, *t)))
 }
 
-/// The estimate as of `end`, over the window ending there, with `end`'s
-/// sport on top of the base.
+/// The estimate for `end`: a fit over the complete days before it, with
+/// `end`'s sport on top of the base.
 pub async fn expenditure_on(db: &Db, user: &User, end: NaiveDate) -> AppResult<Estimate> {
-    let start = end - Duration::days(WINDOW_DAYS - 1);
+    let start = end - Duration::days(WINDOW_DAYS);
     let rows = day::days(db, user, start, end).await?;
     let latest = day::trend_up_to(db, user, end)
         .await?
         .values()
         .last()
         .map(|(_, t)| *t);
+    let first = db.first_day(user.id).await?;
     Ok(expenditure::estimate(
         &window_rows(&rows),
         latest,
         end,
         &profile_of(user),
+        first,
     ))
 }
 
@@ -88,8 +90,8 @@ impl DayEstimate {
     }
 }
 
-/// One estimate per day of the range; each day looks back over its own
-/// window. Built from one wide query, not one per day.
+/// One estimate per day of the range; each day looks back over the
+/// complete days before it. Built from one wide query, not one per day.
 pub async fn expenditure_series(
     db: &Db,
     user: &User,
@@ -97,22 +99,26 @@ pub async fn expenditure_series(
     to: NaiveDate,
 ) -> AppResult<Vec<(NaiveDate, Estimate)>> {
     day::check_range(from, to)?;
-    let start = from - Duration::days(WINDOW_DAYS - 1);
+    let start = from - Duration::days(WINDOW_DAYS);
     let rows = day::days(db, user, start, to).await?;
     let all = window_rows(&rows);
     let trend = day::trend_up_to(db, user, to).await?;
     let profile = profile_of(user);
+    let first = db.first_day(user.id).await?;
     let mut out = Vec::new();
     let mut d = from;
     while d <= to {
-        let window_start = d - Duration::days(WINDOW_DAYS - 1);
+        let window_start = d - Duration::days(WINDOW_DAYS);
         let window: Vec<expenditure::DayRow> = all
             .iter()
             .filter(|r| r.day >= window_start && r.day <= d)
             .copied()
             .collect();
         let latest = trend.range(..=d).next_back().map(|(_, (_, t))| *t);
-        out.push((d, expenditure::estimate(&window, latest, d, &profile)));
+        out.push((
+            d,
+            expenditure::estimate(&window, latest, d, &profile, first),
+        ));
         d += Duration::days(1);
     }
     Ok(out)

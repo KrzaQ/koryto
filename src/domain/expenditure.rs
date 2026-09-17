@@ -1,12 +1,23 @@
-//! How much a person actually burns. Over a trailing window, intake minus
-//! the energy stored as weight change is what was burnt; take the sport kcal
-//! logged in the window out of that and the rest is the base, what the body
-//! spends on a day without training. A day's expenditure is the base plus
-//! the sport logged that day, so a swim earns its kcal back on the day it
-//! happened while the base stays honest: a habitual swimmer's sessions are
-//! not counted twice. Until the window has enough data the Mifflin-St Jeor
-//! equation times a non-sport activity factor stands in for the base, and
-//! the result says which it is.
+//! How much a person actually burns. Over the complete days before the day
+//! in question, intake minus the energy stored as weight change is what was
+//! burnt. Take the sport kcal logged in those days out of that, and the rest
+//! is the fit: what the body spends on a day without training. A day's
+//! expenditure is the base plus the sport logged that day. A swim earns its
+//! kcal back on the day it happened, and a habitual swimmer's sessions are
+//! not counted twice.
+//!
+//! The fit does not replace the Mifflin-St Jeor seed at once. The first weeks
+//! of eating less shed water and glycogen, and the kcal-per-kilogram figure
+//! reads that loss as fat, so a fit over two weeks can overstate the burn by
+//! hundreds of kcal for as long as those weeks sit in the window. The base
+//! starts at the seed and moves to the fit as logged days fill the window and
+//! as the person's first weeks move out of it. The result says how far it
+//! has moved.
+//!
+//! The weight change is the slope of a straight line through the days'
+//! readings, fitted by least squares. The smoothed trend is not used here:
+//! it lags the scale, so while it catches up after a quick drop, every day
+//! looks like more loss than there was.
 
 use chrono::NaiveDate;
 use rmcp::schemars;
@@ -16,23 +27,30 @@ use serde::Serialize;
 
 use super::trend::round_div;
 
-/// The trailing window, in days including the end day.
+/// Complete days before the day in question that the fit reads.
 pub const WINDOW_DAYS: i64 = 28;
-/// Logged days the window needs before the adaptive number is shown.
+/// Logged days the fit needs before it moves the base at all.
 pub const MIN_LOGGED_DAYS: usize = 14;
+/// Logged days in the window at which the data no longer limits the fit.
+pub const FULL_TRUST_DAYS: usize = 28;
+/// Days since the person's first entry before the fit moves the base at all.
+pub const SETTLING_DAYS: i64 = 14;
+/// Days since the first entry at which the start no longer limits the fit:
+/// by then the first weeks have left the window.
+pub const SETTLED_DAYS: i64 = 42;
 /// Days between the first and last weigh-in in the window it needs.
 pub const MIN_WEIGHT_SPAN_DAYS: i64 = 10;
 /// Energy per kilogram of body weight, the usual working figure.
 pub const KCAL_PER_KG: i64 = 7700;
 
-/// One day of the window: `kcal` is None on an unlogged day, `trend_g` is
-/// the weight trend on a day with a reading, `sport_kcal` the kcal logged
-/// against that day's sport (None when no entry carries a number).
+/// One day of the window: `kcal` is None on an unlogged day, `weight_g` is
+/// the day's first reading, `sport_kcal` the kcal logged against that day's
+/// sport (None when no entry carries a number).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DayRow {
     pub day: NaiveDate,
     pub kcal: Option<i32>,
-    pub trend_g: Option<i32>,
+    pub weight_g: Option<i32>,
     pub sport_kcal: Option<i32>,
 }
 
@@ -67,7 +85,8 @@ impl std::str::FromStr for Sex {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, utoipa::ToSchema, schemars::JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum Basis {
-    /// Base derived from intake, sport and the weight trend over the window.
+    /// Base moved toward the fit from intake, sport and the weight trend;
+    /// `trust_pct` says how far.
     Adaptive,
     /// Mifflin-St Jeor times the activity factor as the base; not enough data yet.
     Seed,
@@ -84,39 +103,51 @@ pub struct Estimate {
     /// The sport kcal logged on the day, added on top of the base.
     pub sport_kcal: i32,
     pub basis: Basis,
+    /// Complete logged days before the day that the fit read
     pub logged_days: usize,
     pub weight_span_days: i64,
-    /// What the seed would say for the base, for the UI to show next to the adaptive number.
+    /// What the seed says for the base.
     pub seed_kcal: Option<i32>,
+    /// What the fit alone says for the base, once there are enough days for one.
+    pub adaptive_kcal: Option<i32>,
+    /// How much of the base comes from the fit, 0 to 100; the seed gives the rest.
+    pub trust_pct: u8,
 }
 
-/// `rows` is the window in day order ending on `end`, at most [`WINDOW_DAYS`]
-/// long; `latest_trend_g` is the most recent trend weight known at all (it may
-/// be older than the window). The sport of the last row, when it is `end`, is
-/// the day's sport.
+/// `rows` is the window in day order: up to [`WINDOW_DAYS`] complete days
+/// before `end`, then `end` itself. `latest_trend_g` is the most recent trend
+/// weight known at all (it may be older than the window); the seed uses it.
+/// `first_day` is the person's first entry of any kind. The row for `end`
+/// gives the day's sport and its morning weigh-in; its intake is ignored.
 pub fn estimate(
     rows: &[DayRow],
     latest_trend_g: Option<i32>,
     end: NaiveDate,
     profile: &Profile,
+    first_day: Option<NaiveDate>,
 ) -> Estimate {
-    // Net intake on logged days: what was eaten minus what the day's sport
-    // burnt. Sport on an unlogged day is left out, as that day's intake is.
+    // Net intake on complete logged days: what was eaten minus what the
+    // day's sport burnt. The day in question is still being eaten, and
+    // letting it in would make every snack raise the burn it is measured
+    // against. Sport on an unlogged day is left out, as that day's intake is.
     let logged: Vec<i64> = rows
         .iter()
+        .filter(|r| r.day < end)
         .filter_map(|r| {
             r.kcal
                 .map(|k| i64::from(k) - i64::from(r.sport_kcal.unwrap_or(0)))
         })
         .collect();
     let sport_today = rows
-        .last()
-        .filter(|r| r.day == end)
+        .iter()
+        .find(|r| r.day == end)
         .and_then(|r| r.sport_kcal)
         .unwrap_or(0);
+    // A morning weigh-in on the day itself shows what the days before it did.
     let weigh_ins: Vec<(NaiveDate, i32)> = rows
         .iter()
-        .filter_map(|r| r.trend_g.map(|t| (r.day, t)))
+        .filter(|r| r.day <= end)
+        .filter_map(|r| r.weight_g.map(|w| (r.day, w)))
         .collect();
     let span = match (weigh_ins.first(), weigh_ins.last()) {
         (Some(a), Some(b)) => (b.0 - a.0).num_days(),
@@ -124,20 +155,26 @@ pub fn estimate(
     };
     let seed_kcal = seed(profile, latest_trend_g, end);
 
-    let (base, basis) = if logged.len() >= MIN_LOGGED_DAYS && span >= MIN_WEIGHT_SPAN_DAYS {
-        let mean_net_intake = round_div(logged.iter().sum::<i64>(), logged.len() as i64);
-        let delta_g = i64::from(weigh_ins.last().expect("span > 0").1)
-            - i64::from(weigh_ins.first().expect("span > 0").1);
-        // Energy stored per day: Δgrams × kcal/kg ÷ 1000 ÷ days.
-        let stored_per_day = round_div(delta_g * KCAL_PER_KG, 1000 * span);
-        (
-            Some((mean_net_intake - stored_per_day).max(0) as i32),
-            Basis::Adaptive,
-        )
-    } else if seed_kcal.is_some() {
-        (seed_kcal, Basis::Seed)
-    } else {
-        (None, Basis::None)
+    let adaptive_kcal =
+        (logged.len() >= MIN_LOGGED_DAYS && span >= MIN_WEIGHT_SPAN_DAYS).then(|| {
+            let mean_net_intake = round_div(logged.iter().sum::<i64>(), logged.len() as i64);
+            let (grams, days) = slope(&weigh_ins);
+            // Energy stored per day: grams/day × kcal/kg ÷ 1000.
+            let stored_per_day = round_div(grams * KCAL_PER_KG, days * 1000);
+            (mean_net_intake - stored_per_day).max(0) as i32
+        });
+    let (base, basis, trust_pct) = match (adaptive_kcal, seed_kcal) {
+        (Some(fit), Some(seed)) => match trust(logged.len(), first_day, end) {
+            0 => (Some(seed), Basis::Seed, 0),
+            t => {
+                let moved = round_div(i64::from(fit - seed) * t, 100);
+                (Some(seed + moved as i32), Basis::Adaptive, t)
+            }
+        },
+        // Without a profile there is nothing to lean on, so the fit stands alone.
+        (Some(fit), None) => (Some(fit), Basis::Adaptive, 100),
+        (None, Some(seed)) => (Some(seed), Basis::Seed, 0),
+        (None, None) => (None, Basis::None, 0),
     };
     Estimate {
         kcal: base.map(|b| b + sport_today),
@@ -147,7 +184,46 @@ pub fn estimate(
         logged_days: logged.len(),
         weight_span_days: span,
         seed_kcal,
+        adaptive_kcal,
+        trust_pct: trust_pct as u8,
     }
+}
+
+/// The percentage of the base that the fit earns. Two things limit it, and
+/// the smaller one counts: how many of the window's days are logged
+/// ([`MIN_LOGGED_DAYS`] to [`FULL_TRUST_DAYS`]), and how long ago the person
+/// started ([`SETTLING_DAYS`] to [`SETTLED_DAYS`]). Each rises in a straight
+/// line between its two ends.
+fn trust(logged: usize, first_day: Option<NaiveDate>, end: NaiveDate) -> i64 {
+    let ramp = |value: i64, from: i64, to: i64| {
+        round_div(100 * (value - from).clamp(0, to - from), to - from)
+    };
+    let by_data = ramp(
+        logged as i64,
+        MIN_LOGGED_DAYS as i64,
+        FULL_TRUST_DAYS as i64,
+    );
+    let by_age = first_day.map_or(0, |f| {
+        ramp((end - f).num_days(), SETTLING_DAYS, SETTLED_DAYS)
+    });
+    by_data.min(by_age)
+}
+
+/// The least-squares slope through `(day, grams)`, as grams over days so it
+/// stays in integers. The caller makes sure the days are not all the same.
+fn slope(points: &[(NaiveDate, i32)]) -> (i64, i64) {
+    let origin = points[0].0;
+    let n = points.len() as i64;
+    let (mut sx, mut sy, mut sxy, mut sxx) = (0i64, 0i64, 0i64, 0i64);
+    for (d, g) in points {
+        let x = (*d - origin).num_days();
+        let y = i64::from(*g);
+        sx += x;
+        sy += y;
+        sxy += x * y;
+        sxx += x * x;
+    }
+    (n * sxy - sx * sy, n * sxx - sx * sx)
 }
 
 /// Mifflin-St Jeor: `10 kg + 6.25 cm − 5 age + 5` (male) or `− 161` (female),
@@ -196,6 +272,7 @@ mod tests {
             activity_factor: dec("1.40"),
         }
     }
+    /// Days from 1 September, one row each.
     fn window(
         n_days: i64,
         kcal: impl Fn(i64) -> Option<i32>,
@@ -205,10 +282,19 @@ mod tests {
             .map(|i| DayRow {
                 day: d("2026-09-01") + chrono::Duration::days(i),
                 kcal: kcal(i),
-                trend_g: trend(i),
+                weight_g: trend(i),
                 sport_kcal: None,
             })
             .collect()
+    }
+    /// `window(28, ..)` is 1 to 28 September, all complete; the estimate is
+    /// for the day after, 29 September.
+    const END: &str = "2026-09-29";
+    /// A person who started long before the window, so only the data limits
+    /// how much the fit counts.
+    const LONG_AGO: Option<NaiveDate> = NaiveDate::from_ymd_opt(2026, 1, 1);
+    fn weekly(i: i64) -> Option<i32> {
+        (i % 7 == 0).then_some(80000)
     }
 
     #[test]
@@ -231,92 +317,47 @@ mod tests {
 
     #[test]
     fn below_the_threshold_it_is_the_seed_or_nothing() {
-        let rows = window(
-            28,
-            |i| (i < 10).then_some(2000),
-            |i| (i % 7 == 0).then_some(80000),
-        );
-        let e = estimate(&rows, Some(80000), d("2026-09-28"), &profile());
+        let rows = window(28, |i| (i < 10).then_some(2000), weekly);
+        let e = estimate(&rows, Some(80000), d(END), &profile(), LONG_AGO);
         assert_eq!(e.basis, Basis::Seed);
-        assert_eq!(e.kcal, Some(2450));
-        assert_eq!(e.base_kcal, Some(2450));
-        assert_eq!(e.sport_kcal, 0);
-        assert_eq!(e.logged_days, 10);
-        assert_eq!(e.weight_span_days, 21);
+        assert_eq!(
+            (e.kcal, e.base_kcal, e.sport_kcal),
+            (Some(2450), Some(2450), 0)
+        );
+        assert_eq!((e.logged_days, e.weight_span_days), (10, 21));
+        assert_eq!((e.adaptive_kcal, e.trust_pct), (None, 0));
 
         // Enough logged days but weigh-ins too close together.
         let rows = window(28, |_| Some(2000), |i| (i == 0 || i == 5).then_some(80000));
-        let e = estimate(&rows, Some(80000), d("2026-09-28"), &profile());
-        assert_eq!(e.basis, Basis::Seed);
-        assert_eq!(e.weight_span_days, 5);
+        let e = estimate(&rows, Some(80000), d(END), &profile(), LONG_AGO);
+        assert_eq!((e.basis, e.weight_span_days), (Basis::Seed, 5));
 
         let mut p = profile();
         p.born_on = None;
-        let e = estimate(&rows, Some(80000), d("2026-09-28"), &p);
+        let e = estimate(&rows, Some(80000), d(END), &p, LONG_AGO);
         assert_eq!((e.basis, e.kcal), (Basis::None, None));
     }
 
     #[test]
-    fn sport_is_added_on_the_day_and_taken_out_of_the_base() {
-        // Seed: a 600 kcal swim on the last day raises that day's expenditure
-        // by 600 and leaves the base alone.
-        let mut rows = window(
-            28,
-            |i| (i < 10).then_some(2000),
-            |i| (i % 7 == 0).then_some(80000),
-        );
-        rows[27].sport_kcal = Some(600);
-        let e = estimate(&rows, Some(80000), d("2026-09-28"), &profile());
-        assert_eq!(
-            (e.basis, e.base_kcal, e.sport_kcal, e.kcal),
-            (Basis::Seed, Some(2450), 600, Some(3050))
-        );
-
-        // Sport on a day that is not the end day is not "today's" sport.
-        let e = estimate(&rows, Some(80000), d("2026-09-29"), &profile());
-        assert_eq!((e.sport_kcal, e.kcal), (0, Some(2450)));
-
-        // Adaptive: 2000 a day, weight flat, 700 kcal of sport on every seventh
-        // day. What was burnt is 2000 a day; 100 of that is sport, so the base
-        // is 1900, and the swim day reads 1900 + 700.
-        let mut rows = window(28, |_| Some(2000), |i| (i % 7 == 0).then_some(80000));
-        for i in (6..28).step_by(7) {
-            rows[i].sport_kcal = Some(700);
-        }
-        let e = estimate(&rows, Some(80000), d("2026-09-28"), &profile());
-        assert_eq!(
-            (e.basis, e.base_kcal, e.sport_kcal, e.kcal),
-            (Basis::Adaptive, Some(1900), 700, Some(2600))
-        );
-
-        // Sport on an unlogged day does not enter the base.
-        let mut rows = window(
-            28,
-            |i| (i != 3).then_some(2000),
-            |i| (i % 7 == 0).then_some(80000),
-        );
-        rows[3].sport_kcal = Some(5000);
-        let e = estimate(&rows, Some(80000), d("2026-09-28"), &profile());
-        assert_eq!(e.base_kcal, Some(2000));
-
-        // Nothing to go on: sport alone gives no number.
-        let mut p = profile();
-        p.sex = None;
-        let mut rows = window(5, |_| None, |_| None);
-        rows[4].sport_kcal = Some(600);
-        let e = estimate(&rows, None, d("2026-09-05"), &p);
-        assert_eq!((e.basis, e.kcal, e.sport_kcal), (Basis::None, None, 600));
-    }
-
-    #[test]
     fn adaptive_intake_minus_stored_energy() {
-        // Steady 2000 kcal a day, weight flat: expenditure is 2000.
-        let rows = window(28, |_| Some(2000), |i| (i % 7 == 0).then_some(80000));
-        let e = estimate(&rows, Some(80000), d("2026-09-28"), &profile());
-        assert_eq!((e.basis, e.kcal), (Basis::Adaptive, Some(2000)));
+        // Steady 2000 kcal a day for a full window, weight flat: the base is
+        // the fit alone.
+        let e = estimate(
+            &window(28, |_| Some(2000), weekly),
+            Some(80000),
+            d(END),
+            &profile(),
+            LONG_AGO,
+        );
+        assert_eq!(
+            (e.basis, e.kcal, e.trust_pct),
+            (Basis::Adaptive, Some(2000), 100)
+        );
         assert_eq!(e.seed_kcal, Some(2450));
 
-        // Lost 700 g over 21 days on 2000 a day: 700 × 7.7 / 21 ≈ 257 more burnt.
+        // Lost 700 g over 21 days on 2000 a day. The four readings do not sit
+        // on one line; the line through them falls 34.3 g a day, so about
+        // 264 kcal a day more is burnt than eaten.
         let rows = window(
             28,
             |_| Some(2000),
@@ -328,8 +369,10 @@ mod tests {
                 _ => None,
             },
         );
-        let e = estimate(&rows, Some(79300), d("2026-09-28"), &profile());
-        assert_eq!(e.kcal, Some(2257));
+        assert_eq!(
+            estimate(&rows, Some(79300), d(END), &profile(), LONG_AGO).kcal,
+            Some(2264)
+        );
 
         // Gained 700 g on the same intake: 1743.
         let rows = window(
@@ -342,31 +385,157 @@ mod tests {
             },
         );
         assert_eq!(
-            estimate(&rows, Some(80700), d("2026-09-28"), &profile()).kcal,
+            estimate(&rows, Some(80700), d(END), &profile(), LONG_AGO).kcal,
             Some(1743)
         );
     }
 
     #[test]
+    fn the_fit_earns_its_way_in() {
+        // The fit says 2000 and the seed says 2450. With the last `n` complete
+        // days logged, the base starts at the seed and ends at the fit.
+        let base = |n: i64| {
+            let rows = window(28, |i| (i >= 28 - n).then_some(2000), weekly);
+            let e = estimate(&rows, Some(80000), d(END), &profile(), LONG_AGO);
+            (e.basis, e.trust_pct, e.base_kcal, e.adaptive_kcal)
+        };
+        assert_eq!(base(13), (Basis::Seed, 0, Some(2450), None));
+        assert_eq!(base(14), (Basis::Seed, 0, Some(2450), Some(2000)));
+        assert_eq!(base(15), (Basis::Adaptive, 7, Some(2418), Some(2000)));
+        assert_eq!(base(21), (Basis::Adaptive, 50, Some(2225), Some(2000)));
+        assert_eq!(base(28), (Basis::Adaptive, 100, Some(2000), Some(2000)));
+
+        // A full window, but the person started recently: the start limits
+        // the fit until their first weeks have left the window.
+        let rows = window(28, |_| Some(2000), weekly);
+        let started = |days_ago: i64| {
+            let first = d(END) - chrono::Duration::days(days_ago);
+            let e = estimate(&rows, Some(80000), d(END), &profile(), Some(first));
+            (e.basis, e.trust_pct, e.base_kcal)
+        };
+        assert_eq!(started(14), (Basis::Seed, 0, Some(2450)));
+        assert_eq!(started(28), (Basis::Adaptive, 50, Some(2225)));
+        assert_eq!(started(42), (Basis::Adaptive, 100, Some(2000)));
+        // No entries at all means no start, so the fit does not count yet.
+        let e = estimate(&rows, Some(80000), d(END), &profile(), None);
+        assert_eq!((e.basis, e.base_kcal), (Basis::Seed, Some(2450)));
+
+        // Without a profile the fit is the only number, so it stands alone.
+        let mut p = profile();
+        p.height_mm = None;
+        let rows = window(28, |i| (i >= 14).then_some(2000), weekly);
+        let e = estimate(&rows, Some(80000), d(END), &p, LONG_AGO);
+        assert_eq!(
+            (e.basis, e.trust_pct, e.base_kcal),
+            (Basis::Adaptive, 100, Some(2000))
+        );
+    }
+
+    #[test]
+    fn the_day_being_eaten_does_not_move_its_own_burn() {
+        // A full window, then the day in question: a big dinner on it must
+        // not raise the burn the dinner is measured against.
+        let with_today = |kcal: i32| {
+            let mut rows = window(29, |_| Some(2000), weekly);
+            rows[28].kcal = Some(kcal);
+            estimate(&rows, Some(80000), d(END), &profile(), LONG_AGO).base_kcal
+        };
+        assert_eq!(with_today(500), Some(2000));
+        assert_eq!(with_today(6000), Some(2000));
+
+        // Its morning weigh-in does count: it shows what the days before did.
+        let mut rows = window(29, |_| Some(2000), |i| (i == 0).then_some(80000));
+        rows[28].weight_g = Some(79300);
+        let e = estimate(&rows, Some(79300), d(END), &profile(), LONG_AGO);
+        // 700 g over 28 days: 700 × 7.7 / 28 ≈ 193 more burnt than eaten.
+        assert_eq!(e.adaptive_kcal, Some(2193));
+    }
+
+    #[test]
+    fn the_line_follows_the_scale_and_ignores_how_it_got_there() {
+        // A quick 2.1 kg drop in the first week, then a steady 70 g a day.
+        // With the drop in the window the line is steep; once the window has
+        // moved past it, the line is exactly the steady rate.
+        let weight = |i: i64| -> Option<i32> {
+            let i = i as i32;
+            Some(if i < 7 {
+                102_100 - 300 * i
+            } else {
+                100_000 - 70 * (i - 7)
+            })
+        };
+        let rows = window(28, |_| Some(2000), weight);
+        let with_drop = estimate(&rows, Some(99000), d(END), &profile(), LONG_AGO);
+        assert!(with_drop.adaptive_kcal.unwrap() > 2700, "{with_drop:?}");
+
+        let end = d("2026-10-27");
+        let rows: Vec<DayRow> = window(56, |_| Some(2000), weight)
+            .into_iter()
+            .filter(|r| r.day >= end - chrono::Duration::days(WINDOW_DAYS))
+            .collect();
+        let after = estimate(&rows, Some(97000), end, &profile(), LONG_AGO);
+        // 70 g × 7.7 = 539 kcal a day stored less than eaten.
+        assert_eq!(after.adaptive_kcal, Some(2539));
+    }
+
+    #[test]
     fn a_flight_day_is_just_one_more_logged_day() {
         // Twenty-seven ordinary days and one 30-hour day with five meals.
-        let rows = window(
-            28,
-            |i| Some(if i == 10 { 3600 } else { 2000 }),
-            |i| (i % 7 == 0).then_some(80000),
-        );
-        let e = estimate(&rows, Some(80000), d("2026-09-28"), &profile());
+        let rows = window(28, |i| Some(if i == 10 { 3600 } else { 2000 }), weekly);
         // (27 × 2000 + 3600) / 28 = 2057.
-        assert_eq!(e.kcal, Some(2057));
-        // Unlogged days are gaps, not zeros.
-        let rows = window(
-            28,
-            |i| (i != 10).then_some(2000),
-            |i| (i % 7 == 0).then_some(80000),
-        );
         assert_eq!(
-            estimate(&rows, Some(80000), d("2026-09-28"), &profile()).kcal,
+            estimate(&rows, Some(80000), d(END), &profile(), LONG_AGO).kcal,
+            Some(2057)
+        );
+        // Unlogged days are gaps, not zeros.
+        let rows = window(28, |i| (i != 10).then_some(2000), weekly);
+        assert_eq!(
+            estimate(&rows, Some(80000), d(END), &profile(), LONG_AGO).adaptive_kcal,
             Some(2000)
         );
+    }
+
+    #[test]
+    fn sport_is_added_on_the_day_and_taken_out_of_the_base() {
+        // Seed: a 600 kcal swim on the day raises that day's expenditure by
+        // 600 and leaves the base alone.
+        let mut rows = window(29, |i| (i < 10).then_some(2000), weekly);
+        rows[28].sport_kcal = Some(600);
+        let e = estimate(&rows, Some(80000), d(END), &profile(), LONG_AGO);
+        assert_eq!(
+            (e.basis, e.base_kcal, e.sport_kcal, e.kcal),
+            (Basis::Seed, Some(2450), 600, Some(3050))
+        );
+
+        // Sport on another day is not that day's sport.
+        let e = estimate(&rows, Some(80000), d("2026-09-30"), &profile(), LONG_AGO);
+        assert_eq!((e.sport_kcal, e.kcal), (0, Some(2450)));
+
+        // A full window of 2000 a day, weight flat, and 700 kcal of sport on
+        // every seventh day. What was burnt is 2000 a day and 100 of it is
+        // sport, so the base is 1900; a swim on the day reads 1900 + 700.
+        let mut rows = window(29, |_| Some(2000), weekly);
+        for i in [6, 13, 20, 27, 28] {
+            rows[i].sport_kcal = Some(700);
+        }
+        let e = estimate(&rows, Some(80000), d(END), &profile(), LONG_AGO);
+        assert_eq!(
+            (e.basis, e.base_kcal, e.sport_kcal, e.kcal),
+            (Basis::Adaptive, Some(1900), 700, Some(2600))
+        );
+
+        // Sport on an unlogged day does not enter the fit.
+        let mut rows = window(28, |i| (i != 3).then_some(2000), weekly);
+        rows[3].sport_kcal = Some(5000);
+        let e = estimate(&rows, Some(80000), d(END), &profile(), LONG_AGO);
+        assert_eq!(e.adaptive_kcal, Some(2000));
+
+        // Nothing to go on: sport alone gives no number.
+        let mut p = profile();
+        p.sex = None;
+        let mut rows = window(5, |_| None, |_| None);
+        rows[4].sport_kcal = Some(600);
+        let e = estimate(&rows, None, d("2026-09-05"), &p, LONG_AGO);
+        assert_eq!((e.basis, e.kcal, e.sport_kcal), (Basis::None, None, 600));
     }
 }

@@ -100,6 +100,8 @@ pub async fn expenditure(
             logged_days: 0,
             weight_span_days: 0,
             seed_kcal: None,
+            adaptive_kcal: None,
+            trust_pct: 0,
         });
     Ok(Json(ExpenditureStats {
         user_id: user.id,

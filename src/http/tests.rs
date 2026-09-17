@@ -1306,11 +1306,16 @@ async fn stats_endpoints_follow_the_days() {
     assert_eq!(days[0]["basis"], "seed");
     assert_eq!(days[27]["basis"], "adaptive");
     assert_eq!(b["latest"]["basis"], "adaptive");
-    // Lost 2.1 kg of raw weight, but the trend moves slowly: about 390 g over
-    // 21 days, 140-odd kcal a day, minus the swim's share of the window
-    // (500 / 28 ≈ 18). The base lands a little above 2100.
-    let base = b["latest"]["base_kcal"].as_i64().unwrap();
-    assert!(base > 2100 && base < 2160, "{b}");
+    // The scale falls 0.7 kg a week on 2000 kcal a day, so the line through
+    // the readings says the body burns 2000 + 100 g × 7.7 = 2770. The swim
+    // is on the day itself and stays out of the fit. The person started 27
+    // days before, so the base has moved only 46% of the way from the seed.
+    let latest = &b["latest"];
+    assert_eq!(latest["adaptive_kcal"], 2770, "{b}");
+    assert_eq!(latest["trust_pct"], 46);
+    assert_eq!(latest["seed_kcal"], 2095);
+    let base = latest["base_kcal"].as_i64().unwrap();
+    assert_eq!(base, 2406);
     assert_eq!(b["latest"]["sport_kcal"], 500);
     assert_eq!(b["latest"]["kcal"], base + 500);
     assert_eq!(days[27]["kcal"], base + 500);
@@ -1332,13 +1337,18 @@ async fn stats_endpoints_follow_the_days() {
     assert_eq!(b["mean_kcal"], 2000);
     assert_eq!(b["mean_balance"], 100);
     assert_eq!(b["sport_kcal"], 500);
-    // Six days at 2000 − base, one at 2000 − base − 500: the swim day earned its kcal.
-    let vs = b["mean_balance_vs_expenditure"].as_i64().unwrap();
-    assert!(vs < 2000 - base && vs > 2000 - base - 100, "{b}");
     assert_eq!(b["expenditure"]["kcal"], base + 500);
     assert_eq!(b["rows"].as_array().unwrap().len(), 7);
     // One estimate per row, in the same order: what the chart draws.
     let per_day = b["expenditure_days"].as_array().unwrap();
+    // The mean balance is taken day by day: each day's 2000 against that
+    // day's burn, the swim day's burn 500 higher.
+    let balances: i64 = per_day
+        .iter()
+        .map(|e| 2000 - e["kcal"].as_i64().unwrap())
+        .sum();
+    let expected = (balances as f64 / 7.0).round() as i64;
+    assert_eq!(b["mean_balance_vs_expenditure"], expected, "{b}");
     assert_eq!(per_day.len(), 7);
     assert_eq!(per_day[0]["day"], "2026-08-24");
     assert_eq!(per_day[6]["sport_kcal"], 500);
