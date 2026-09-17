@@ -44,13 +44,14 @@ those; it lists them as outstanding.
 - **Sport raises the day's burn; it is never subtracted from intake.** The
   headline number is intake against the day's **expenditure**: a base, what
   the body spends on a day without training, plus the sport kcal logged that
-  day. A 600 kcal swim means 600 kcal more room that day. The base is
-  **adaptive**, derived from intake, sport and the weight trend over rolling
-  weeks (sport in the window is taken out before dividing, so a habitual
-  swimmer's sessions are not counted twice), seeded by Mifflin-St Jeor times
-  a non-sport activity factor until there is enough data. Sport kcal is the
-  number the person gives or agrees to; an entry without one leaves the
-  budget alone.
+  day. A 600 kcal swim means 600 kcal more room that day. The base starts
+  at Mifflin-St Jeor times a non-sport activity factor and moves toward a
+  **fit** of intake, sport and the scale over the four weeks before the day
+  (sport in the window is taken out first, so a habitual swimmer's sessions
+  are not counted twice). It moves only as the data and the person's history
+  earn it, because the first weeks of a diet shed water that the scale
+  cannot tell from fat. Sport kcal is the number the person gives, or the
+  kind's MET rate; an entry without either leaves the budget alone.
 - **kcal and protein only.** Both are integers. Weight is integer grams,
   duration integer minutes, portions a `NUMERIC(6,2)`. No floats in the
   domain; display converts.
@@ -291,24 +292,32 @@ inheritance.
   reading (gaps do not decay it). Returned alongside the raw points.
 - **Expenditure** on day D = `base + sport_kcal(D)`, where `sport_kcal(D)` is
   the sum of the kcal on D's non-voided sport entries (entries without a
-  number add nothing). The **base (adaptive)** over a trailing window of 28
-  days ending at D, for a user: let the logged days in the window be `n`,
-  `net` their mean of `kcal − sport_kcal`, `Δtrend_g` the trend weight at the
-  last weigh-in in the window minus the trend at the first, `span` the days
-  between those two weigh-ins. Then `base = net − Δtrend_g × 7.7 / span`
-  (7 700 kcal per kg, stated as a constant with a comment). Reported only
-  when `n ≥ 14` and `span ≥ 10`; otherwise the **seed**: Mifflin-St Jeor with
-  the latest trend weight (or raw weight, or nothing) times
-  `activity_factor`, which covers everything but logged sport (default 1.20,
-  sedentary), and the response says which (`basis: "adaptive" | "seed" |
-  "none"`). With basis `none` the sport alone is not an expenditure. Mifflin:
+  number add nothing). The **fit** reads the 28 complete days before D; D's
+  own intake is left out, because D is still being eaten and a snack must
+  not raise the burn it is measured against. Let the logged days there be
+  `n`, `net` their mean of `kcal − sport_kcal`, and `slope_g` the
+  least-squares slope of the days' first readings from those days and D's
+  morning, in grams a day (not the smoothed trend, which lags the scale and
+  overstates the loss while it catches up). Then `fit = net − slope_g × 7.7`
+  (7 700 kcal per kg, stated as a constant with a comment), computed when
+  `n ≥ 14` and the readings span `≥ 10` days. The **seed** is Mifflin-St Jeor
+  with the latest trend weight times `activity_factor`, which covers
+  everything but logged sport (default 1.20, sedentary). The **base** is
+  `seed + (fit − seed) × trust`, where `trust` is the smaller of two ramps:
+  `n` from 14 to 28 logged days, and the days since the person's first entry
+  from 14 to 42. Six weeks in, the first weeks have left the window and the
+  base is the fit. Without a profile there is no seed, and the fit is the
+  base. The response says which (`basis: "adaptive" | "seed" | "none"`) and
+  carries `seed_kcal`, `adaptive_kcal` and `trust_pct`. With basis `none`
+  the sport alone is not an expenditure. Mifflin:
   `10 × kg + 6.25 × cm − 5 × age + 5` (male) or `− 161` (female); needs
   `height_mm`, `born_on`, `sex` and a weight, otherwise `none`. All of this is
   a pure function over a slice of `(day, kcal, weight_g, sport_kcal)` rows,
   unit-tested with synthetic series including the flight-day case (a 30-hour
-  day with five meals does not move the number by more than the maths says)
-  and the habitual-swimmer case (weekly sessions lower the base by their
-  share and raise the session day by the whole).
+  day with five meals does not move the number by more than the maths says),
+  the habitual-swimmer case (weekly sessions lower the base by their share
+  and raise the session day by the whole), and a quick early drop that the
+  line reads exactly once it has left the window.
 - **Portions and foods**: a meal logged against a food stores
   `kcal = round(food.kcal × portions)` and `protein_g` likewise at write time,
   with `source = 'food'`. Editing the food later does not touch past meals.

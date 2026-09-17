@@ -43,10 +43,14 @@ this one copies its bones from.
   data; editing a rate leaves logged sessions alone, and a kcal given by hand
   is an override (`source` says `manual` or `met`).
 - Expenditure on a day is a base plus that day's logged sport kcal. The base
-  is derived from intake, sport and the weight trend over a rolling window
-  (so habitual sport is not counted twice), seeded by Mifflin-St Jeor times
-  a non-sport activity factor (default 1.20). Sport kcal is never subtracted
-  from intake; it raises the day's burn, and the budget is burn minus intake.
+  starts at Mifflin-St Jeor times a non-sport activity factor (default 1.20)
+  and moves toward a fit over the 28 complete days before the day: intake
+  minus sport, minus the least-squares slope of the scale × 7.7. The day's
+  own intake never enters its own burn. Trust in the fit ramps with logged
+  days (14→28) and with days since the person's first entry (14→42), because
+  a new diet sheds water the scale reads as fat. Sport kcal is never
+  subtracted from intake; it raises the day's burn, and the budget is burn
+  minus intake.
 - Households: everyone gets one of their own at first login; sharing is
   `household add-member EMAIL --to EMAIL`, which moves a person (entries
   follow their owner, foods move or fork). Everyone in one sees and may edit
