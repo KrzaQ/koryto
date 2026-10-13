@@ -9,11 +9,13 @@
 # The run directory: docker-compose.yml, .env and data/, nothing else. The
 # image is built from this checkout and started there; the compose file is
 # copied on every deploy so the two never drift.
-RUN_DIR ?= /storage/encrypted/koryto
+RUN_DIR ?= /srv/koryto
 
-push: ## Push to every configured remote
-	git push origin master && git push gh master
+REMOTES ?= origin
 
-deploy: image ## Build the image here, then restart the stack in $(RUN_DIR)
+push: ## Push to every remote in REMOTES
+	for r in $(REMOTES); do git push $$r master || exit 1; done
+
+deploy: image ## Build the image here, then restart the stack in RUN_DIR
 	install -m 644 docker-compose.yml $(RUN_DIR)/docker-compose.yml
 	cd $(RUN_DIR) && docker compose up -d --no-build
