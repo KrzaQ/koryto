@@ -1,6 +1,7 @@
 .PHONY: help install install-backend install-frontend format lint test test-db \
 	build build-frontend dev-backend dev-frontend types image docker-build docker-run clean
 .DEFAULT_GOAL := help
+.NOTPARALLEL:
 
 # Machine-specific targets (deploy, extra push remotes) live in Makefile.local,
 # which is gitignored. See Makefile.local.example.
@@ -10,15 +11,10 @@
 DEV_PORT ?= 8000
 DEV_PUBLIC_URL ?= http://localhost:$(DEV_PORT)
 
-# Database for the DB-backed test suite. Empty means scripts/test-db.sh brings
-# up its own throwaway Postgres (docker, else initdb when not root). In the
-# limes sandbox .limes.local.toml sets it to the host's scratch server.
-TEST_DATABASE_URL ?=
-
 help: ## Show this help
-	@grep -hE '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
+	@grep -hE '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort -t: -k1,1 | \
 		awk 'BEGIN {FS = ":.*?## "; w = 12} { k[NR] = $$1; v[NR] = $$2; if (length($$1) > w) w = length($$1) } \
-		     END { for (i = 1; i <= NR; i++) printf "  \033[36m%-*s\033[0m %s\n", w, k[i], v[i] }'
+		     END { for (i = 1; i <= NR; i++) printf "  \033[36m%-*s\033[0m  %s\n", w, k[i], v[i] }'
 
 install: install-backend install-frontend ## Install all dependencies
 
@@ -40,8 +36,11 @@ test: ## Run the sandbox-safe test suites (no database needed)
 	cargo test
 	cd frontend && npm test
 
+# scripts/test-db.sh uses TEST_DATABASE_URL from the environment when it is set,
+# else it brings up its own throwaway Postgres (docker, else initdb when not root).
+# In the limes sandbox .limes.local.toml sets it to the host's scratch server.
 test-db: ## Run the DB-backed tests against a real Postgres
-	TEST_DATABASE_URL=$(TEST_DATABASE_URL) ./scripts/test-db.sh
+	./scripts/test-db.sh
 
 build-frontend: install-frontend ## Build the frontend bundle
 	cd frontend && npm run build
@@ -49,7 +48,7 @@ build-frontend: install-frontend ## Build the frontend bundle
 build: install format lint build-frontend ## Install, format, lint, then build the release binary
 	cargo build --release
 
-dev-backend: ## Run the backend in dev-auth mode on $(DEV_PORT)
+dev-backend: ## Run the backend in dev-auth mode on DEV_PORT (default 8000)
 	KORYTO_AUTH=dev KORYTO_PUBLIC_URL=$(DEV_PUBLIC_URL) KORYTO_BIND=127.0.0.1:$(DEV_PORT) \
 		cargo run -- serve
 
