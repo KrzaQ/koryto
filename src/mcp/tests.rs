@@ -539,9 +539,38 @@ async fn scopes_and_delegation() {
 
     // A delegate token acts as the named person and needs the header.
     let delegate = make_token(&t, &["read", "write", "delegate"], None).await;
+    // Without it the session opens, so the client connects, and every tool
+    // says what is missing.
+    let mut d = Client::new(app(&t).await, delegate.clone());
+    d.initialize().await;
+    let refused = d.call("whoami", json!({})).await;
+    assert!(is_error(&refused), "{refused}");
+    assert!(error_text(&refused).contains("X-Koryto-User"), "{refused}");
+
+    // A person who has not used the browser lately: the tools name the fix.
+    sqlx::query("UPDATE users SET last_login_at = now() - interval '31 days' WHERE id = $1")
+        .bind(home.bob.id)
+        .execute(t.db.pool())
+        .await
+        .unwrap();
+    let mut d = Client::new(app(&t).await, delegate.clone());
+    d.delegate_user = Some("bob@example.com".into());
+    d.initialize().await;
+    let refused = d.call("whoami", json!({})).await;
+    assert!(is_error(&refused), "{refused}");
+    assert!(error_text(&refused).contains("log in once"), "{refused}");
+    sqlx::query("UPDATE users SET last_login_at = now() WHERE id = $1")
+        .bind(home.bob.id)
+        .execute(t.db.pool())
+        .await
+        .unwrap();
+
+    // An unknown token is still a plain 401 at the door.
+    let mut bogus = Client::new(app(&t).await, "kor_nonsense".into());
+    let (status, _) = bogus.rpc("initialize", json!({})).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+
     let mut d = Client::new(app(&t).await, delegate);
-    let (status, _) = d.rpc("initialize", json!({})).await;
-    assert_eq!(status, StatusCode::FORBIDDEN);
     d.delegate_user = Some("bob@example.com".into());
     d.initialize().await;
     let me = structured(&d.call("whoami", json!({})).await);

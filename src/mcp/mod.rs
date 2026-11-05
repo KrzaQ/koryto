@@ -67,11 +67,23 @@ pub struct KorytoMcp {
     tool_router: ToolRouter<Self>,
 }
 
+/// Why a valid token may not act now, for example a delegate whose person
+/// has not used the browser lately. `require_bearer` lets such requests
+/// through and every tool answers with this text. A 403 at `initialize`
+/// reaches the person only as "failed to connect", and a tool error reaches
+/// the model with the reason and what to do.
+#[derive(Clone)]
+struct Refused(String);
+
 fn principal(parts: &http::request::Parts) -> Result<&Principal, ErrorData> {
-    parts
+    if let Some(p) = parts.extensions.get::<Principal>() {
+        return Ok(p);
+    }
+    let message = parts
         .extensions
-        .get::<Principal>()
-        .ok_or_else(|| ErrorData::invalid_request("no bearer token", None))
+        .get::<Refused>()
+        .map_or_else(|| "no bearer token".to_string(), |r| r.0.clone());
+    Err(ErrorData::invalid_request(message, None))
 }
 
 fn require_write(parts: &http::request::Parts) -> Result<&Principal, ErrorData> {
@@ -1426,7 +1438,9 @@ impl ServerHandler for KorytoMcp {
 // ----- mounting --------------------------------------------------------------
 
 /// Bearer only: no cookies, no dev-mode fallback. The principal is stored in
-/// the request extensions, which rmcp forwards to the tools.
+/// the request extensions, which rmcp forwards to the tools. A known token
+/// that may not act (403) still gets through, carrying a `Refused` instead,
+/// so the tools can say why; an unknown or missing token stays a 401.
 async fn require_bearer(State(state): State<AppState>, mut req: Request, next: Next) -> Response {
     match auth::bearer(&state, req.headers()).await {
         Ok(Some(p)) => {
@@ -1434,6 +1448,11 @@ async fn require_bearer(State(state): State<AppState>, mut req: Request, next: N
             next.run(req).await
         }
         Ok(None) => ApiError::unauthorized().into_response(),
+        Err(e) if e.status == http::StatusCode::FORBIDDEN => {
+            tracing::warn!("mcp refused: {}", e.message);
+            req.extensions_mut().insert(Refused(e.message));
+            next.run(req).await
+        }
         Err(e) => e.into_response(),
     }
 }

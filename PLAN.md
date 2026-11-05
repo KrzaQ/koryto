@@ -386,7 +386,10 @@ the API extractor and the MCP middleware. A delegate token without
 last browser use is older than a session (30 days), is 403 with a message
 that says so; the last rule lets an authentik-side revocation reach the
 gateway path without a CLI step, within two sessions. Any request on a
-session records the visit in `last_login_at`, at most once an hour. Every login has a household: a personal
+session records the visit in `last_login_at`, at most once an hour. On
+`/mcp` the 403 does not stop the request: the session opens and every tool
+returns the message, because Open WebUI shows a refused connection only as
+"failed to connect". Every login has a household: a personal
 one is created with the user row, so the app works alone from day one and
 sharing is a merge (`household add-member`).
 

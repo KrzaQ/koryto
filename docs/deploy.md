@@ -101,7 +101,8 @@ On the Tokens page (session only; tokens cannot make tokens):
 The gateway token acts only for people who have used koryto in the browser
 in the last 30 days. A session lasts 30 days from its login, so removing
 someone in authentik stops their Open WebUI access within 60 days on its
-own. To stop someone seeing
+own. When the window has run out, Open WebUI still connects, and every
+koryto tool answers with the reason and the URL to log in at. To stop someone seeing
 the shared log at once, `koryto household remove-member <email>`: they keep
 their own entries, in a household of their own, and lose sight of yours.
 
