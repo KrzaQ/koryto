@@ -373,6 +373,17 @@ impl Db {
         .await?)
     }
 
+    /// Records that the person used the browser now. A session outlives the
+    /// login that made it, and the delegate window counts from this time, so
+    /// someone who keeps using the web UI keeps the gateway working.
+    pub async fn touch_login(&self, id: i32) -> DbResult<()> {
+        sqlx::query("UPDATE users SET last_login_at = now() WHERE id = $1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
     pub async fn get_user(&self, id: i32) -> DbResult<User> {
         sqlx::query_as("SELECT * FROM users WHERE id = $1")
             .bind(id)

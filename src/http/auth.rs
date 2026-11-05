@@ -24,10 +24,14 @@ use crate::domain::token;
 pub const SESSION_COOKIE: &str = "koryto_session";
 const LOGIN_COOKIE: &str = "koryto_login";
 const SESSION_DAYS: i64 = 30;
-/// A delegate token acts only for people who have logged in through the
-/// browser this recently, so a revocation in authentik reaches the gateway
-/// path on its own, with the same lag a session cookie has.
+/// A delegate token acts only for people who have used the browser this
+/// recently. A session cookie lives `SESSION_DAYS` from its login, so a
+/// revocation in authentik reaches the gateway path on its own within twice
+/// that.
 pub const DELEGATE_LOGIN_DAYS: i64 = SESSION_DAYS;
+/// A browser request records the visit when the last one is older than this,
+/// so a page load does not write to the database on every API call.
+const LOGIN_TOUCH_HOURS: i64 = 1;
 pub const DEV_SUBJECT: &str = "dev";
 
 /// The request header a delegate token uses to name the acting user.
@@ -163,7 +167,14 @@ async fn session_user(state: &AppState, jar: &PrivateCookieJar) -> Option<User> 
     if exp < Utc::now().timestamp() {
         return None;
     }
-    state.db.get_user(id).await.ok()
+    let user = state.db.get_user(id).await.ok()?;
+    let stale = user
+        .last_login_at
+        .is_none_or(|at| Utc::now() - at > chrono::Duration::hours(LOGIN_TOUCH_HOURS));
+    if stale && let Err(e) = state.db.touch_login(user.id).await {
+        tracing::warn!(user = user.id, "cannot record the browser visit: {e}");
+    }
+    Some(user)
 }
 
 /// The dev user; the login gives it a household like anyone else.
@@ -198,18 +209,20 @@ pub async fn bearer(state: &AppState, headers: &HeaderMap) -> ApiResult<Option<P
         .map(str::trim)
         .filter(|v| !v.is_empty())
         .ok_or_else(|| ApiError::forbidden("delegate token needs X-Koryto-User"))?;
-    let user = state
-        .db
-        .find_user_by_email(email)
-        .await?
-        .ok_or_else(|| ApiError::forbidden(format!("{email} has never logged in here")))?;
+    let user = state.db.find_user_by_email(email).await?.ok_or_else(|| {
+        ApiError::forbidden(format!(
+            "{email} has never logged in to koryto; open {url} in a browser and log in once",
+            url = state.config.public_url
+        ))
+    })?;
     let fresh = user
         .last_login_at
         .is_some_and(|at| Utc::now() - at <= chrono::Duration::days(DELEGATE_LOGIN_DAYS));
     if !fresh {
         return Err(ApiError::forbidden(format!(
-            "{email} has not logged in through the browser for {DELEGATE_LOGIN_DAYS} days; \
-             log in there once to keep using the gateway"
+            "{email} has not used koryto in the browser for {DELEGATE_LOGIN_DAYS} days; \
+             open {url} and log in once to keep using the gateway",
+            url = state.config.public_url
         )));
     }
     Ok(Some(Principal::Delegate { token: t, user }))

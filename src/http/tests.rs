@@ -1581,6 +1581,28 @@ mod oidc_flow {
         assert_eq!(b["household"]["members"].as_array().unwrap().len(), 1);
         assert_eq!(b["timezone"], "Europe/Warsaw");
 
+        // Using the session counts as a visit, so the delegate window
+        // follows someone who keeps the web UI open across logins.
+        sqlx::query("UPDATE users SET last_login_at = now() - interval '20 days'")
+            .execute(t.db.pool())
+            .await
+            .unwrap();
+        let me = Request::builder()
+            .method("GET")
+            .uri("/api/me")
+            .header(header::COOKIE, &session)
+            .body(Body::empty())
+            .unwrap();
+        let (s, _, _) = call(&app, me).await;
+        assert_eq!(s, StatusCode::OK);
+        let recent: bool = sqlx::query_scalar(
+            "SELECT bool_and(last_login_at > now() - interval '1 minute') FROM users",
+        )
+        .fetch_one(t.db.pool())
+        .await
+        .unwrap();
+        assert!(recent, "the visit was not recorded");
+
         let out = Request::builder()
             .method("POST")
             .uri("/api/auth/logout")
